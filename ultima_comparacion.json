@@ -1,0 +1,186 @@
+{
+  "resumen_cambios": {
+    "total_cambios": 7,
+    "clausulas_modificadas": 4,
+    "clausulas_agregadas": 2,
+    "clausulas_eliminadas": 0
+  },
+  "cambios": [
+    {
+      "clausula": "Cláusula 1 - Objeto",
+      "tipo": "MODIFICADA",
+      "antes": "Consultoría tecnológica sin especificación de alcance",
+      "despues": "Consultoría conforme Anexo A con entregables, metodología y criterios de aceptación",
+      "impacto_parte_a": "FAVORABLE",
+      "impacto_parte_b": "FAVORABLE",
+      "explicacion": "Ambas partes se benefician: el Cliente sabe qué esperar y el Prestador tiene límites claros de su obligación"
+    },
+    {
+      "clausula": "Cláusula 2 - Plazo de pago",
+      "tipo": "MODIFICADA",
+      "antes": "60 días para pagar la factura",
+      "despues": "30 días para pagar. Tipo de cambio: dólar MEP del BCRA al día del pago",
+      "impacto_parte_a": "DESFAVORABLE",
+      "impacto_parte_b": "FAVORABLE",
+      "explicacion": "El Prestador logró reducir el plazo a la mitad y fijar un tipo de cambio. Mejora crítica de flujo de caja"
+    },
+    {
+      "clausula": "Cláusula 3 - Responsabilidad",
+      "tipo": "MODIFICADA",
+      "antes": "Tope de USD 1.000 en cualquier caso",
+      "despues": "Tope de USD 15.000 (3 meses). Se excluyen dolo y culpa grave",
+      "impacto_parte_a": "FAVORABLE",
+      "impacto_parte_b": "DESFAVORABLE",
+      "explicacion": "El Cliente tiene mayor cobertura ante incumplimiento. El Prestador asume más riesgo pero con exclusión de dolo"
+    },
+    {
+      "clausula": "Cláusula 4 - Confidencialidad",
+      "tipo": "MODIFICADA",
+      "antes": "Obligación genérica sin definiciones ni plazo post-contrato",
+      "despues": "Información definida en Anexo B, vigencia de 2 años post-contrato, excepciones estándar",
+      "impacto_parte_a": "FAVORABLE",
+      "impacto_parte_b": "NEUTRAL",
+      "explicacion": "Cláusula ahora ejecutable. Antes era decorativa. El Cliente gana protección real"
+    },
+    {
+      "clausula": "Cláusula 5 - Rescisión",
+      "tipo": "MODIFICADA",
+      "antes": "7 días de preaviso sin causa, sin indemnización",
+      "despues": "30 días de preaviso + indemnización de 1 mes de honorarios",
+      "impacto_parte_a": "DESFAVORABLE",
+      "impacto_parte_b": "FAVORABLE",
+      "explicacion": "Costo de salida más alto para ambas partes. Protege especialmente al Prestador de rescisiones abruptas"
+    },
+    {
+      "clausula": "Cláusula 6 - Propiedad Intelectual",
+      "tipo": "AGREGADA",
+      "antes": null,
+      "despues": "PI es del Cliente una vez pagados todos los honorarios",
+      "impacto_parte_a": "FAVORABLE",
+      "impacto_parte_b": "NEUTRAL",
+      "explicacion": "El Cliente asegura la PI pero condicionada al pago total. El Prestador retiene PI si no le pagan — protección inteligente"
+    },
+    {
+      "clausula": "Cláusula 7 - Jurisdicción (antes Cláusula 6)",
+      "tipo": "MODIFICADA",
+      "antes": "Tribunales de CABA directamente",
+      "despues": "Mediación obligatoria previa (CEMA), luego tribunales de CABA",
+      "impacto_parte_a": "NEUTRAL",
+      "impacto_parte_b": "FAVORABLE",
+      "explicacion": "Mediación previa reduce costos y tiempos. Generalmente favorece a la parte más chica (Prestador)"
+    }
+  ],
+  "clausulas_sin_cambios": [],
+  "balance_general": {
+    "parte_a": {
+      "nombre": "TECHSTART S.A. (Cliente)",
+      "cambios_favorables": 4,
+      "cambios_desfavorables": 2,
+      "evaluacion": "MEJORÓ"
+    },
+    "parte_b": {
+      "nombre": "CONSULTORA XYZ S.R.L. (Prestador)",
+      "cambios_favorables": 4,
+      "cambios_desfavorables": 1,
+      "evaluacion": "MEJORÓ"
+    }
+  },
+  "alertas": [
+    "La cláusula de PI condiciona la transferencia al pago total — si el Cliente deja de pagar en el mes 10, la PI de 10 meses de trabajo queda en disputa",
+    "No se agregó cláusula de penalidad por mora en el pago — los 30 días sin consecuencia por incumplimiento siguen siendo un riesgo",
+    "El Anexo A y Anexo B son referenciados pero no incluidos — el contrato es incompleto sin ellos"
+  ],
+  "recomendacion": "La V5 es sustancialmente mejor que la V1 para ambas partes. El contrato pasó de ser riesgoso a razonablemente equilibrado. Antes de firmar: (1) completar Anexos A y B, (2) agregar cláusula de mora, (3) definir qué pasa con la PI si hay pago parcial.",
+  "mejoras_propuestas": [
+    {
+      "clausula": "Cláusula 2 - Mora por pago tardío (NUEVA)",
+      "problema_actual": "No hay consecuencia si el Cliente paga después de los 30 días. El Prestador no tiene herramienta para presionar el cobro.",
+      "texto_sugerido": "En caso de mora en el pago, el Cliente abonará un interés equivalente a la tasa activa del Banco Nación + 5 puntos porcentuales, calculado por cada día de atraso. Si la mora supera los 15 días, el Prestador podrá suspender la prestación del servicio sin que ello constituya incumplimiento contractual.",
+      "justificacion_legal": "Art. 768 CCyC — intereses moratorios. La suspensión de prestación ante mora es una excepción de incumplimiento (Art. 1031 CCyC).",
+      "prioridad": "CRÍTICA"
+    },
+    {
+      "clausula": "Cláusula 6 - Propiedad Intelectual",
+      "problema_actual": "La PI se transfiere solo si se pagan TODOS los honorarios. No define qué pasa con pago parcial (ej: pagó 10 de 12 meses).",
+      "texto_sugerido": "La PI de los entregables será transferida proporcionalmente al pago efectuado. Los entregables correspondientes a períodos impagos permanecerán bajo titularidad del Prestador hasta la cancelación total. En caso de rescisión anticipada, la PI de los entregables pagados se transfiere al Cliente dentro de los 10 días hábiles.",
+      "justificacion_legal": "Principio de proporcionalidad contractual. Evita enriquecimiento sin causa (Art. 1794 CCyC) de cualquiera de las partes.",
+      "prioridad": "CRÍTICA"
+    },
+    {
+      "clausula": "Cláusula 3 - Responsabilidad",
+      "problema_actual": "El tope de USD 15.000 no distingue entre tipos de daño. Un error menor tiene el mismo tope que una falla grave.",
+      "texto_sugerido": "La responsabilidad del Prestador queda limitada a: (a) por daño directo: hasta el equivalente a 3 meses de honorarios; (b) por lucro cesante: hasta 1 mes de honorarios. Quedan excluidas de todo límite las situaciones de dolo, culpa grave, o violación de la cláusula de confidencialidad.",
+      "justificacion_legal": "La distinción entre daño directo y lucro cesante es estándar en contratos de servicios profesionales y tiene fundamento en Art. 1738 CCyC.",
+      "prioridad": "IMPORTANTE"
+    },
+    {
+      "clausula": "Cláusula 5 - Rescisión",
+      "problema_actual": "La indemnización de 1 mes es fija sin importar cuándo se rescinde. Rescindir en el mes 2 cuesta lo mismo que en el mes 11.",
+      "texto_sugerido": "En caso de rescisión sin causa durante los primeros 6 meses de vigencia, la indemnización será equivalente a 2 meses de honorarios. A partir del mes 7, será de 1 mes de honorarios. La parte que rescinda deberá abonar adicionalmente los honorarios devengados hasta la fecha efectiva de terminación.",
+      "justificacion_legal": "Protege la inversión inicial del Prestador en onboarding y setup. Fundamento en Art. 1078-1079 CCyC sobre resolución de contratos.",
+      "prioridad": "IMPORTANTE"
+    },
+    {
+      "clausula": "Cláusula de Fuerza Mayor (NUEVA)",
+      "problema_actual": "No existe cláusula de fuerza mayor. Ante eventos extraordinarios (crisis cambiaria, pandemia, regulación nueva), no hay mecanismo de ajuste.",
+      "texto_sugerido": "Ninguna de las partes será responsable por incumplimientos derivados de eventos de fuerza mayor o caso fortuito conforme Art. 1730 CCyC. Ante eventos que impidan la prestación por más de 30 días corridos, cualquiera de las partes podrá rescindir sin indemnización, abonándose únicamente los servicios efectivamente prestados.",
+      "justificacion_legal": "Art. 1730 CCyC. Especialmente relevante en Argentina por volatilidad cambiaria y regulatoria.",
+      "prioridad": "DESEABLE"
+    }
+  ],
+  "estrategia_negociacion": {
+    "posicion_fuerte": [
+      "El Prestador ya concedió aumento del tope de responsabilidad de USD 1.000 a USD 15.000 — puede usar esto como leverage para pedir la cláusula de mora",
+      "La cláusula de PI favorece al Cliente — el Prestador puede pedir proporcionalidad a cambio",
+      "La mediación obligatoria fue una concesión del Cliente — muestra voluntad de negociar"
+    ],
+    "concesiones_posibles": [
+      "Aceptar que la confidencialidad se extienda a 3 años (en vez de 2) a cambio de la cláusula de mora",
+      "Reducir la indemnización por rescisión temprana si el Cliente acepta fuerza mayor",
+      "Aceptar auditoría trimestral del servicio a cambio de pago a 15 días"
+    ],
+    "puntos_no_negociables": [
+      "Tipo de cambio MEP — volver a dejarlo indefinido sería repetir el error de la V1",
+      "Plazo de pago no mayor a 30 días — el flujo de caja del Prestador no resiste más",
+      "Exclusión de dolo y culpa grave del tope de responsabilidad — es estándar legal y no negociable"
+    ]
+  },
+  "next_steps": [
+    {
+      "paso": "Redactar Anexo A (Alcance de Servicios) y Anexo B (Información Confidencial)",
+      "responsable": "ABOGADO",
+      "urgencia": "INMEDIATO",
+      "detalle": "El contrato referencia ambos anexos pero no existen. Sin ellos, las cláusulas 1 y 4 son inaplicables. Usar los entregables del presupuesto original como base para el Anexo A."
+    },
+    {
+      "paso": "Proponer cláusula de mora y fuerza mayor a la contraparte",
+      "responsable": "ABOGADO",
+      "urgencia": "INMEDIATO",
+      "detalle": "Enviar las redacciones sugeridas arriba como propuesta de V6. Presentarlas como protección para ambas partes, no como demanda unilateral."
+    },
+    {
+      "paso": "Validar el tipo de cambio MEP con el área financiera del Cliente",
+      "responsable": "CLIENTE",
+      "urgencia": "ESTA SEMANA",
+      "detalle": "Confirmar que el Cliente puede operativamente pagar al tipo MEP del día de pago. Si usa otro mecanismo, ajustar la cláusula antes de firmar."
+    },
+    {
+      "paso": "Revisar implicaciones fiscales de la facturación en USD",
+      "responsable": "ABOGADO",
+      "urgencia": "ESTA SEMANA",
+      "detalle": "Consultar con contador sobre facturación en moneda extranjera, retenciones aplicables, y si conviene facturar en pesos con cláusula de ajuste en vez de USD directo."
+    },
+    {
+      "paso": "Definir mecanismo de resolución para PI en caso de pago parcial",
+      "responsable": "ABOGADO",
+      "urgencia": "ANTES DE FIRMAR",
+      "detalle": "Negociar con contraparte la transferencia proporcional de PI. Esto evita un escenario de disputa costoso si el contrato termina antes de los 12 meses."
+    },
+    {
+      "paso": "Firmar contrato final (V6 o V7)",
+      "responsable": "CLIENTE",
+      "urgencia": "ANTES DE FIRMAR",
+      "detalle": "Solo firmar cuando: Anexos A y B estén completos, cláusula de mora incluida, y mecanismo de PI parcial definido. Hacer firmar ambas partes con certificación de firma si el monto lo justifica."
+    }
+  ]
+}

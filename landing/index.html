@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LegalFlow — Resolución Inteligente de Contratos</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --primary: #1a1a2e;
+            --accent: #4f46e5;
+            --accent-light: #818cf8;
+            --bg: #fafafa;
+            --card: #ffffff;
+            --text: #1a1a2e;
+            --text-light: #6b7280;
+            --border: #e5e7eb;
+            --green: #10b981;
+            --yellow: #f59e0b;
+            --red: #ef4444;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            color: var(--text);
+            background: var(--bg);
+            line-height: 1.6;
+        }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+        /* ─── Hero ─── */
+        .hero {
+            padding: 80px 0 60px;
+            text-align: center;
+            background: linear-gradient(135deg, var(--primary) 0%, #16213e 100%);
+            color: white;
+        }
+        .hero-badge {
+            display: inline-block;
+            background: rgba(79, 70, 229, 0.3);
+            border: 1px solid var(--accent-light);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            margin-bottom: 24px;
+            color: var(--accent-light);
+        }
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            line-height: 1.1;
+        }
+        .hero h1 span { color: var(--accent-light); }
+        .hero p {
+            font-size: 20px;
+            color: #94a3b8;
+            max-width: 600px;
+            margin: 0 auto 32px;
+        }
+        .hero-cta {
+            display: inline-block;
+            background: var(--accent);
+            color: white;
+            padding: 16px 32px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            transition: transform 0.2s;
+        }
+        .hero-cta:hover { transform: translateY(-2px); }
+        .hero-stats {
+            display: flex;
+            justify-content: center;
+            gap: 48px;
+            margin-top: 48px;
+            padding-top: 32px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .stat { text-align: center; }
+        .stat-number { font-size: 32px; font-weight: 700; color: var(--accent-light); }
+        .stat-label { font-size: 13px; color: #94a3b8; margin-top: 4px; }
+
+        /* ─── Problem ─── */
+        .problem {
+            padding: 80px 0;
+            text-align: center;
+        }
+        .problem h2 { font-size: 32px; margin-bottom: 16px; }
+        .problem p { color: var(--text-light); font-size: 18px; max-width: 700px; margin: 0 auto 40px; }
+        .problem-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            text-align: left;
+        }
+        .problem-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+        }
+        .problem-card .emoji { font-size: 28px; margin-bottom: 12px; }
+        .problem-card h3 { font-size: 16px; margin-bottom: 8px; }
+        .problem-card p { font-size: 14px; color: var(--text-light); margin: 0; }
+
+        /* ─── How it works ─── */
+        .how {
+            padding: 80px 0;
+            background: white;
+        }
+        .how h2 { font-size: 32px; text-align: center; margin-bottom: 48px; }
+        .flow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .flow-step {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            width: 180px;
+        }
+        .flow-step .num {
+            background: var(--accent);
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .flow-step h4 { font-size: 14px; margin-bottom: 4px; }
+        .flow-step p { font-size: 12px; color: var(--text-light); }
+        .flow-arrow { font-size: 20px; color: var(--accent); }
+
+        /* ─── Capas ─── */
+        .capas {
+            padding: 80px 0;
+        }
+        .capas h2 { font-size: 32px; text-align: center; margin-bottom: 12px; }
+        .capas .subtitle { text-align: center; color: var(--text-light); margin-bottom: 48px; font-size: 16px; }
+        .capas-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+        }
+        .capa-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+            position: relative;
+            transition: border-color 0.2s;
+        }
+        .capa-card:hover { border-color: var(--accent); }
+        .capa-card.popular {
+            border-color: var(--accent);
+            box-shadow: 0 4px 24px rgba(79, 70, 229, 0.1);
+        }
+        .capa-card.popular::after {
+            content: "MAS POPULAR";
+            position: absolute;
+            top: -10px;
+            right: 24px;
+            background: var(--accent);
+            color: white;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 4px;
+        }
+        .capa-num { font-size: 12px; color: var(--accent); font-weight: 700; margin-bottom: 8px; }
+        .capa-card h3 { font-size: 20px; margin-bottom: 8px; }
+        .capa-card .desc { color: var(--text-light); font-size: 14px; margin-bottom: 16px; }
+        .capa-card ul { list-style: none; margin-bottom: 20px; }
+        .capa-card li { font-size: 14px; padding: 6px 0; padding-left: 20px; position: relative; }
+        .capa-card li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-weight: 700; }
+        .capa-price { font-size: 24px; font-weight: 700; }
+        .capa-price span { font-size: 14px; font-weight: 400; color: var(--text-light); }
+
+        /* ─── Enter comparison ─── */
+        .vs {
+            padding: 60px 0;
+            background: white;
+        }
+        .vs h2 { font-size: 28px; text-align: center; margin-bottom: 32px; }
+        .vs-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .vs-table th {
+            background: var(--primary);
+            color: white;
+            padding: 12px 16px;
+            text-align: left;
+        }
+        .vs-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .vs-table tr:nth-child(even) { background: var(--bg); }
+
+        /* ─── CTA ─── */
+        .cta {
+            padding: 80px 0;
+            text-align: center;
+            background: linear-gradient(135deg, var(--primary) 0%, #16213e 100%);
+            color: white;
+        }
+        .cta h2 { font-size: 36px; margin-bottom: 16px; }
+        .cta p { color: #94a3b8; font-size: 18px; margin-bottom: 32px; }
+        .cta-form {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .cta-form input {
+            padding: 14px 20px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 15px;
+            width: 280px;
+        }
+        .cta-form input::placeholder { color: #94a3b8; }
+        .cta-form button {
+            padding: 14px 28px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .cta-form button:hover { background: var(--accent-light); }
+        .cta-note { font-size: 13px; color: #64748b; margin-top: 16px; }
+
+        /* ─── Footer ─── */
+        footer {
+            padding: 32px 0;
+            text-align: center;
+            color: var(--text-light);
+            font-size: 13px;
+        }
+
+        /* ─── Responsive ─── */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 32px; }
+            .hero-stats { flex-direction: column; gap: 24px; }
+            .problem-grid { grid-template-columns: 1fr; }
+            .capas-grid { grid-template-columns: 1fr; }
+            .flow { flex-direction: column; }
+            .flow-arrow { transform: rotate(90deg); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Hero -->
+<section class="hero">
+    <div class="container">
+        <div class="hero-badge">AI-Native Legal Service</div>
+        <h1>Tus contratos resueltos<br>en <span>minutos, no horas</span></h1>
+        <p>Analizamos, comparamos y mejoramos tus contratos corporativos con IA. Vos solo revisas y decidis.</p>
+        <a href="#contacto" class="hero-cta">Probar gratis con un contrato</a>
+        <div class="hero-stats">
+            <div class="stat">
+                <div class="stat-number">10 min</div>
+                <div class="stat-label">vs 3 horas de revisión manual</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">95%</div>
+                <div class="stat-label">de cláusulas riesgosas detectadas</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">$0</div>
+                <div class="stat-label">primer contrato sin costo</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Problem -->
+<section class="problem">
+    <div class="container">
+        <h2>El problema que resolvemos</h2>
+        <p>Los abogados in-house pierden horas revisando contratos repetitivos, comparando versiones a mano, y redactando mejoras desde cero.</p>
+        <div class="problem-grid">
+            <div class="problem-card">
+                <div class="emoji">⏰</div>
+                <h3>3+ horas por contrato</h3>
+                <p>Revisar, analizar riesgos, comparar con la versión anterior, redactar mejoras. Todo manual.</p>
+            </div>
+            <div class="problem-card">
+                <div class="emoji">🔴</div>
+                <h3>Riesgos que se escapan</h3>
+                <p>Cláusulas faltantes, montos desproporcionados, plazos abusivos. El volumen hace que se pasen cosas.</p>
+            </div>
+            <div class="problem-card">
+                <div class="emoji">📧</div>
+                <h3>Negociaciones perdidas en emails</h3>
+                <p>Los términos se acordaron en 15 emails pero nunca llegaron al contrato final.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- How it works -->
+<section class="how">
+    <div class="container">
+        <h2>Cómo funciona</h2>
+        <div class="flow">
+            <div class="flow-step">
+                <div class="num">1</div>
+                <h4>Envianos el contrato</h4>
+                <p>PDF, Word, email o texto</p>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="num">2</div>
+                <h4>IA analiza</h4>
+                <p>Riesgo, cláusulas, red flags</p>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="num">3</div>
+                <h4>Recibís informe</h4>
+                <p>Mejoras con texto listo</p>
+            </div>
+            <div class="flow-arrow">→</div>
+            <div class="flow-step">
+                <div class="num">4</div>
+                <h4>Vos decidís</h4>
+                <p>Aprobás, negociás o rechazás</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Capas -->
+<section class="capas">
+    <div class="container">
+        <h2>Planes por necesidad</h2>
+        <p class="subtitle">Elegí la capa que se ajusta a lo que necesitás hoy</p>
+        <div class="capas-grid">
+            <div class="capa-card">
+                <div class="capa-num">CAPA 1</div>
+                <h3>Análisis</h3>
+                <p class="desc">Riesgo + Red Flags + Recomendación</p>
+                <ul>
+                    <li>Score de riesgo (0-100)</li>
+                    <li>Cláusulas presentes y faltantes</li>
+                    <li>Red flags con severidad</li>
+                    <li>Recomendación: aprobar/negociar/rechazar</li>
+                </ul>
+                <div class="capa-price">USD 50 <span>/ contrato</span></div>
+            </div>
+            <div class="capa-card popular">
+                <div class="capa-num">CAPA 2</div>
+                <h3>Negociación</h3>
+                <p class="desc">Análisis + Mejoras con texto + Estrategia</p>
+                <ul>
+                    <li>Todo de Capa 1</li>
+                    <li>Texto de mejoras listo para copiar</li>
+                    <li>Fundamento legal (CCyC, leyes)</li>
+                    <li>Estrategia de negociación</li>
+                    <li>Next steps con responsable</li>
+                </ul>
+                <div class="capa-price">USD 200 <span>/ contrato</span></div>
+            </div>
+            <div class="capa-card">
+                <div class="capa-num">CAPA 3</div>
+                <h3>Comparación</h3>
+                <p class="desc">Versión A vs B + quién gana + mejoras</p>
+                <ul>
+                    <li>Análisis de ambas versiones</li>
+                    <li>Diff cláusula por cláusula</li>
+                    <li>Impacto por parte (quién gana)</li>
+                    <li>Evolución del riesgo</li>
+                    <li>Mejoras pendientes con texto</li>
+                </ul>
+                <div class="capa-price">USD 300 <span>/ comparación</span></div>
+            </div>
+            <div class="capa-card">
+                <div class="capa-num">CAPA 4</div>
+                <h3>Full Service</h3>
+                <p class="desc">Emails → Contrato → Análisis → Todo</p>
+                <ul>
+                    <li>Extracción de emails de negociación</li>
+                    <li>Generación de contrato borrador</li>
+                    <li>Análisis + Comparación + Mejoras</li>
+                    <li>Pipeline completo automatizado</li>
+                    <li>Informe ejecutivo</li>
+                </ul>
+                <div class="capa-price">USD 750 <span>/ caso</span></div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Comparison -->
+<section class="vs">
+    <div class="container">
+        <h2>LegalFlow vs el proceso actual</h2>
+        <table class="vs-table">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Proceso manual</th>
+                    <th>LegalFlow</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Tiempo por contrato</strong></td>
+                    <td>3-5 horas</td>
+                    <td>10 minutos</td>
+                </tr>
+                <tr>
+                    <td><strong>Comparar versiones</strong></td>
+                    <td>2+ horas con track changes</td>
+                    <td>Automático con impacto por parte</td>
+                </tr>
+                <tr>
+                    <td><strong>Detectar cláusulas faltantes</strong></td>
+                    <td>Depende de la experiencia del abogado</td>
+                    <td>Checklist automático de 12 cláusulas</td>
+                </tr>
+                <tr>
+                    <td><strong>Texto de mejoras</strong></td>
+                    <td>Redactar desde cero cada vez</td>
+                    <td>Generado con fundamento legal</td>
+                </tr>
+                <tr>
+                    <td><strong>Consistencia</strong></td>
+                    <td>Variable según quién revise</td>
+                    <td>Mismo estándar siempre</td>
+                </tr>
+                <tr>
+                    <td><strong>Costo</strong></td>
+                    <td>$300-500/hora de abogado</td>
+                    <td>Desde USD 50/contrato</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- CTA -->
+<section class="cta" id="contacto">
+    <div class="container">
+        <h2>Probá con tu primer contrato</h2>
+        <p>Mandanos un contrato y te devolvemos el análisis gratis. Sin compromiso.</p>
+        <form class="cta-form" action="https://formspree.io/f/mredygon" method="POST" style="flex-direction: column; align-items: center; gap: 16px;">
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
+                <input type="text" name="nombre" placeholder="Tu nombre" required>
+                <input type="email" name="email" placeholder="Tu email corporativo" required>
+            </div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">
+                <input type="text" name="empresa" placeholder="Empresa" required style="width: 280px;">
+                <select name="necesidad" required style="width: 280px; padding: 14px 20px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; background: rgba(255,255,255,0.1); color: white; font-size: 15px; appearance: none;">
+                    <option value="" disabled selected style="color: #94a3b8;">¿Qué necesitás?</option>
+                    <option value="analisis">Análisis de riesgo de contratos</option>
+                    <option value="comparacion">Comparar versiones de un contrato</option>
+                    <option value="negociacion">Mejoras y estrategia de negociación</option>
+                    <option value="full">Pipeline completo (emails → contrato)</option>
+                    <option value="otro">Otro / No estoy seguro</option>
+                </select>
+            </div>
+            <button type="submit">Quiero probarlo gratis</button>
+        </form>
+        <p class="cta-note">Te respondemos en menos de 24 horas con el análisis de tu contrato.</p>
+    </div>
+</section>
+
+<footer>
+    <div class="container">
+        <p>LegalFlow &copy; 2026 — AI-Native Contract Resolution</p>
+    </div>
+</footer>
+
+</body>
+</html>

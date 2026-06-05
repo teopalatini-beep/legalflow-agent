@@ -1,0 +1,139 @@
+{
+  "datos_extraidos": {
+    "partes": [
+      {
+        "nombre": "TechStart (Laura Méndez)",
+        "rol": "PRESTADOR",
+        "contacto": "laura@techstart.com.ar",
+        "datos_fiscales": null
+      },
+      {
+        "nombre": "DataFlow S.R.L. (Carlos Ruiz, CTO)",
+        "rol": "CLIENTE",
+        "contacto": "cruiz@dataflow.com.ar",
+        "datos_fiscales": null
+      }
+    ],
+    "objeto": "Migración de infraestructura on-premise a AWS (3 servidores EC2 + RDS), setup de CI/CD con GitHub Actions, capacitación de equipo IT, y soporte post-migración",
+    "tipo_contrato_sugerido": "PRESTACIÓN DE SERVICIOS",
+    "terminos_comerciales": {
+      "monto": "USD 18.000 total (facturado en pesos al TC oficial)",
+      "moneda": "USD (facturación en ARS)",
+      "forma_pago": "3 cuotas: 30% inicio, 40% post-migración, 30% fin de soporte",
+      "plazo_pago": "En disputa: Prestador pide 30 días, Cliente pide 45 días. Alternativa: 45 días con ajuste IPC",
+      "duracion": "8 semanas (migración) + 3 meses (soporte) = ~5 meses total"
+    },
+    "condiciones_mencionadas": [
+      {
+        "tema": "Confidencialidad",
+        "detalle": "NDA bilateral acordado. Prestador tendrá acceso a bases de producción.",
+        "origen": "Ambas partes — Laura propuso NDA, Carlos pidió que sea mutuo"
+      },
+      {
+        "tema": "Propiedad Intelectual",
+        "detalle": "Scripts y documentación específica → Cliente. Metodologías y frameworks genéricos → Prestador puede reutilizar.",
+        "origen": "Carlos pidió PI total, Laura negoció separar genérico de específico"
+      },
+      {
+        "tema": "Demoras y horas extra",
+        "detalle": "Demora por culpa del Prestador: sin costo extra. Demora por culpa del Cliente: USD 85/hora adicional.",
+        "origen": "Carlos preguntó, Laura propuso el esquema"
+      },
+      {
+        "tema": "Tipo de cambio",
+        "detalle": "Facturación en pesos al tipo de cambio oficial del día de facturación.",
+        "origen": "Carlos lo pidió como requisito, Laura aceptó"
+      },
+      {
+        "tema": "Ajuste por inflación",
+        "detalle": "Si el plazo de pago es 45 días, se aplicaría ajuste por IPC entre fecha de factura y fecha de pago.",
+        "origen": "Laura lo propuso como alternativa al plazo de 30 días"
+      }
+    ],
+    "puntos_pendientes": [
+      "Plazo de pago: sin definición final (30 vs 45 días con IPC)",
+      "PI de frameworks genéricos: Carlos no respondió si acepta la separación",
+      "Datos fiscales de ambas partes (CUIT) no mencionados",
+      "No se discutió garantía post-migración ni SLA de soporte",
+      "No se definió penalidad por rescisión anticipada"
+    ],
+    "tono_negociacion": "AMIGABLE"
+  },
+  "contrato_borrador": {
+    "titulo": "CONTRATO DE PRESTACIÓN DE SERVICIOS DE MIGRACIÓN CLOUD",
+    "preambulo": "Entre DataFlow S.R.L., CUIT [COMPLETAR], con domicilio en [COMPLETAR], representada por Carlos Ruiz en su carácter de CTO (en adelante 'el Cliente'), y TechStart [COMPLETAR TIPO SOCIETARIO], CUIT [COMPLETAR], con domicilio en [COMPLETAR], representada por Laura Méndez (en adelante 'el Prestador'), se celebra el presente contrato sujeto a las siguientes cláusulas:",
+    "clausulas": [
+      {
+        "numero": 1,
+        "titulo": "OBJETO",
+        "texto": "El Prestador se compromete a realizar la migración de infraestructura tecnológica del Cliente desde servidores on-premise hacia Amazon Web Services (AWS), incluyendo: (a) migración de 3 servidores a instancias EC2 y base de datos RDS; (b) implementación de pipeline CI/CD mediante GitHub Actions; (c) capacitación al equipo de IT del Cliente consistente en 2 sesiones de 4 horas cada una; (d) soporte post-migración por un período de 3 meses desde la fecha de finalización de la migración.",
+        "origen": "EXTRAÍDO DEL EMAIL",
+        "nota": "Alcance tomado directamente del email 1 de Laura. Se recomienda adjuntar Anexo Técnico con detalle de servidores, versiones y criterios de aceptación."
+      },
+      {
+        "numero": 2,
+        "titulo": "PLAZO",
+        "texto": "El proyecto tendrá una duración estimada de 8 semanas para la fase de migración, contadas desde la firma del presente contrato y la entrega de accesos por parte del Cliente. El soporte post-migración se extenderá por 3 meses adicionales desde la finalización exitosa de la migración.",
+        "origen": "EXTRAÍDO DEL EMAIL",
+        "nota": "Se sugiere definir hitos con fechas concretas en un cronograma adjunto."
+      },
+      {
+        "numero": 3,
+        "titulo": "MONTO Y FORMA DE PAGO",
+        "texto": "El precio total del servicio es de USD 18.000 (dólares estadounidenses dieciocho mil), que serán facturados en pesos argentinos al tipo de cambio oficial publicado por el BCRA en la fecha de emisión de cada factura. El pago se realizará en 3 cuotas: (a) USD 5.400 (30%) a la firma del contrato; (b) USD 7.200 (40%) a la finalización de la migración, certificada por acta de aceptación del Cliente; (c) USD 5.400 (30%) al cumplimiento del período de soporte. [OPCIÓN A: Plazo de pago: 30 días de recibida la factura] [OPCIÓN B: Plazo de pago: 45 días de recibida la factura, con ajuste por IPC entre fecha de factura y fecha de efectivo pago].",
+        "origen": "EXTRAÍDO DEL EMAIL",
+        "nota": "⚠️ PUNTO PENDIENTE: Las partes no acordaron si el plazo es 30 o 45 días. Se presentan ambas opciones para definir antes de firmar."
+      },
+      {
+        "numero": 4,
+        "titulo": "DEMORAS Y HORAS ADICIONALES",
+        "texto": "Si la migración excediera el plazo de 8 semanas por causas atribuibles al Prestador, las horas adicionales no generarán costo extra para el Cliente. Si la demora fuera atribuible al Cliente (incluyendo demoras en entrega de accesos, credenciales o aprobaciones), las horas adicionales se facturarán a una tarifa de USD 85 por hora, facturadas en pesos al tipo de cambio oficial vigente.",
+        "origen": "EXTRAÍDO DEL EMAIL",
+        "nota": "Esquema propuesto por Laura en email 3. Carlos no objetó. Se recomienda definir un mecanismo de notificación formal de demoras."
+      },
+      {
+        "numero": 5,
+        "titulo": "CONFIDENCIALIDAD",
+        "texto": "Ambas partes se obligan a mantener estricta confidencialidad sobre toda información técnica, comercial y de negocio a la que accedan en virtud del presente contrato. Esta obligación incluye, sin limitación, bases de datos, código fuente, arquitectura de sistemas, datos de clientes y estrategias comerciales. La obligación de confidencialidad se extenderá por 2 años posteriores a la finalización del contrato por cualquier causa. Se exceptúa la información que: (a) sea de dominio público; (b) haya sido conocida previamente por la parte receptora; (c) sea requerida por autoridad judicial o administrativa competente.",
+        "origen": "EXTRAÍDO DEL EMAIL",
+        "nota": "Laura propuso NDA unilateral, Carlos pidió bilateral. Se redactó como cláusula bilateral dentro del contrato principal, lo cual es más eficiente que un NDA separado."
+      },
+      {
+        "numero": 6,
+        "titulo": "PROPIEDAD INTELECTUAL",
+        "texto": "Los scripts, documentación técnica y todo desarrollo específico realizado para el Cliente en el marco del presente contrato serán de propiedad exclusiva del Cliente una vez abonada la totalidad de los honorarios. El Prestador retiene el derecho de reutilizar metodologías, frameworks, herramientas genéricas y conocimiento técnico general que no contengan información confidencial del Cliente.",
+        "origen": "EXTRAÍDO DEL EMAIL",
+        "nota": "⚠️ PUNTO PENDIENTE: Laura propuso separar PI específica (del Cliente) de genérica (del Prestador). Carlos no confirmó. Definir antes de firmar."
+      },
+      {
+        "numero": 7,
+        "titulo": "JURISDICCIÓN",
+        "texto": "Para cualquier controversia derivada del presente contrato, las partes se someten a mediación prejudicial obligatoria. En caso de no alcanzar acuerdo, serán competentes los tribunales ordinarios de la Ciudad Autónoma de Buenos Aires.",
+        "origen": "ESTÁNDAR LEGAL",
+        "nota": "No se discutió en los emails. Se incluye mediación previa como práctica recomendada."
+      }
+    ],
+    "clausulas_sugeridas_no_mencionadas": [
+      {
+        "titulo": "RESCISIÓN ANTICIPADA",
+        "texto": "Cualquiera de las partes podrá rescindir el presente contrato con 15 días de preaviso fehaciente. En caso de rescisión sin causa por parte del Cliente, deberá abonar los servicios efectivamente prestados más un 20% del saldo pendiente en concepto de lucro cesante. En caso de rescisión por parte del Prestador, deberá completar la transferencia de conocimiento y documentación al Cliente o a quien este designe.",
+        "justificacion": "Ningún email menciona qué pasa si alguna parte quiere salir del contrato. Sin esta cláusula, una rescisión genera disputa automática."
+      },
+      {
+        "titulo": "GARANTÍA Y SLA DE SOPORTE",
+        "texto": "Durante el período de soporte post-migración, el Prestador garantiza un tiempo de respuesta máximo de 4 horas hábiles para incidentes críticos y 24 horas hábiles para incidentes no críticos. Se consideran incidentes críticos aquellos que impidan la operación normal del sistema migrado.",
+        "justificacion": "Se acordaron 3 meses de soporte pero sin definir qué nivel de servicio incluye. Sin SLA, el Cliente no tiene herramienta para exigir respuesta y el Prestador no tiene límites claros de su obligación."
+      },
+      {
+        "titulo": "FUERZA MAYOR",
+        "texto": "Ninguna de las partes será responsable por incumplimientos derivados de eventos de fuerza mayor o caso fortuito conforme Art. 1730 del CCyC. Si el evento impide la prestación por más de 30 días, cualquiera de las partes podrá rescindir sin indemnización, abonándose los servicios efectivamente prestados.",
+        "justificacion": "Relevante por la volatilidad regulatoria y cambiaria argentina. Protege a ambas partes ante escenarios imprevisibles."
+      },
+      {
+        "titulo": "MORA",
+        "texto": "En caso de mora en el pago, el Cliente abonará un interés equivalente a la tasa activa del Banco Nación + 3 puntos porcentuales por cada día de atraso. Si la mora supera los 15 días, el Prestador podrá suspender la prestación del servicio previa notificación fehaciente, sin que ello constituya incumplimiento contractual.",
+        "justificacion": "Se negoció el plazo de pago pero no las consecuencias de no cumplirlo. Sin cláusula de mora, el Prestador no tiene presión legal para cobrar a tiempo."
+      }
+    ]
+  }
+}

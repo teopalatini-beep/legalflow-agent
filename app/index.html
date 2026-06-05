@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LegalFlow — Analizá tu contrato</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --primary: #1a1a2e;
+            --accent: #4f46e5;
+            --accent-light: #818cf8;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+            --green: #10b981;
+            --yellow: #f59e0b;
+            --red: #ef4444;
+            --radius: 12px;
+        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+        /* Nav */
+        nav { background: var(--primary); padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; }
+        nav .logo { color: white; font-weight: 700; font-size: 18px; }
+        nav .logo span { color: var(--accent-light); }
+        nav .status { color: #94a3b8; font-size: 13px; }
+
+        /* Layout */
+        .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1400px; margin: 32px auto; padding: 0 24px; }
+        @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+        /* Panels */
+        .panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+        .panel-header { padding: 16px 24px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+
+        /* Input panel */
+        .input-area { padding: 24px; }
+        .tab-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+        .tab { padding: 8px 16px; border-radius: 6px; font-size: 13px; cursor: pointer; background: var(--bg); border: 1px solid var(--border); color: var(--text-light); transition: all 0.2s; }
+        .tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+        textarea { width: 100%; height: 300px; border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-size: 14px; font-family: 'SF Mono', monospace; resize: vertical; line-height: 1.5; }
+        textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+        .file-drop { border: 2px dashed var(--border); border-radius: 8px; padding: 40px; text-align: center; color: var(--text-light); cursor: pointer; transition: border-color 0.2s; display: none; }
+        .file-drop:hover { border-color: var(--accent); }
+        .file-drop.active { display: block; }
+        .btn-row { margin-top: 16px; display: flex; gap: 12px; }
+        .btn { padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s; }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-primary:hover { background: var(--accent-light); }
+        .btn-secondary { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
+        .capa-select { padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border); font-size: 14px; background: white; }
+
+        /* Output panel */
+        .output-area { padding: 24px; min-height: 400px; }
+        .output-placeholder { text-align: center; padding: 80px 20px; color: var(--text-light); }
+        .output-placeholder .icon { font-size: 48px; margin-bottom: 16px; }
+
+        /* Results */
+        .result-section { margin-bottom: 24px; }
+        .result-section h3 { font-size: 13px; text-transform: uppercase; color: var(--text-light); letter-spacing: 0.5px; margin-bottom: 12px; }
+        .risk-badge { display: inline-flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 8px; font-weight: 700; font-size: 14px; }
+        .risk-alto { background: #fef2f2; color: var(--red); }
+        .risk-medio { background: #fffbeb; color: var(--yellow); }
+        .risk-bajo { background: #f0fdf4; color: var(--green); }
+        .score-bar { height: 8px; background: var(--bg); border-radius: 4px; margin-top: 8px; overflow: hidden; }
+        .score-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+        .risk-item { padding: 10px 12px; border-left: 3px solid; border-radius: 0 6px 6px 0; margin-bottom: 8px; background: var(--bg); font-size: 13px; }
+        .risk-item.alta { border-color: var(--red); }
+        .risk-item.media { border-color: var(--yellow); }
+        .risk-item.baja { border-color: var(--green); }
+        .clausula-list { display: flex; flex-wrap: wrap; gap: 6px; }
+        .clausula-tag { padding: 4px 10px; border-radius: 4px; font-size: 12px; }
+        .tag-presente { background: #f0fdf4; color: #166534; }
+        .tag-faltante { background: #fef2f2; color: #991b1b; text-decoration: none; cursor: pointer; }
+        .tag-riesgo { background: #fffbeb; color: #92400e; text-decoration: none; cursor: pointer; border: 1px solid #f59e0b; }
+        .tag-riesgo:hover, .tag-faltante:hover { opacity: 0.8; }
+        .mejora-card { background: var(--bg); border-radius: 8px; padding: 14px; margin-bottom: 10px; border: 1px solid var(--border); scroll-margin-top: 20px; }
+        .mejora-card.diagnostico { border-left: 3px solid var(--accent); }
+        .mejora-card.propuesta { border-left: 3px solid var(--green); }
+        .mejora-card .prio { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; display: inline-block; margin-bottom: 6px; }
+        .prio-critica { background: #fef2f2; color: var(--red); }
+        .prio-importante { background: #fffbeb; color: var(--yellow); }
+        .prio-deseable { background: #f0fdf4; color: var(--green); }
+        .mejora-card h4 { font-size: 14px; margin-bottom: 6px; }
+        .mejora-card .texto { font-size: 13px; color: var(--text-light); font-style: italic; margin-bottom: 6px; }
+        .mejora-card .fund { font-size: 12px; color: var(--accent); }
+        .step-paragraph { padding: 14px 16px; border-radius: 8px; font-size: 13px; line-height: 1.6; border-left: 3px solid; }
+        .step-paragraph.inmediato { background: #fef2f2; border-color: var(--red); }
+        .step-paragraph.semana { background: #fffbeb; border-color: var(--yellow); }
+        .step-paragraph.deseable { background: #f0fdf4; border-color: var(--green); }
+        .step-paragraph.firmar { background: #f0f9ff; border-color: var(--accent); }
+        .step-paragraph strong { font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
+
+        /* Loading */
+        .loading { text-align: center; padding: 60px; }
+        .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Animations */
+        .fade-in { animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+<nav>
+    <div class="logo">Legal<span>Flow</span></div>
+    <div class="status">⚡ Modo Demo — Análisis instantáneo</div>
+</nav>
+
+<div class="layout">
+    <!-- Input Panel -->
+    <div class="panel">
+        <div class="panel-header">📄 Contrato</div>
+        <div class="input-area">
+            <div class="tab-bar">
+                <div class="tab active" data-tab="paste">Pegar texto</div>
+                <div class="tab" data-tab="file">Subir archivo</div>
+                <div class="tab" data-tab="demo">Usar ejemplo</div>
+            </div>
+
+            <textarea id="contrato-input" placeholder="Pegá el contrato acá..."></textarea>
+            <div class="file-drop" id="file-drop">
+                📁 Arrastrá un archivo .txt acá o hacé click para seleccionar
+                <input type="file" id="file-input" accept=".txt,.pdf,.doc,.docx" style="display:none;">
+            </div>
+
+            <div class="btn-row">
+                <select class="capa-select" id="capa-select">
+                    <option value="1">Capa 1 — Análisis</option>
+                    <option value="2" selected>Capa 2 — Negociación</option>
+                    <option value="3">Capa 3 — Comparación</option>
+                </select>
+                <button class="btn btn-primary" id="btn-analizar">⚡ Analizar contrato</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Output Panel -->
+    <div class="panel">
+        <div class="panel-header">📋 Resultado</div>
+        <div class="output-area" id="output">
+            <div class="output-placeholder">
+                <div class="icon">📑</div>
+                <p>Pegá un contrato a la izquierda y presioná<br><strong>⚡ Analizar contrato</strong></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ─── Datos Demo ───
+const CONTRATO_DEMO = `CONTRATO DE PRESTACIÓN DE SERVICIOS
+
+Entre:
+FINTECH SOLUTIONS S.A., CUIT 30-71234567-9, con domicilio en Av. Corrientes 1234, CABA (en adelante "el Cliente")
+Y:
+CLOUD SERVICES S.R.L., CUIT 30-98765432-1, con domicilio en Av. Santa Fe 5678, CABA (en adelante "el Prestador")
+
+CLÁUSULA 1 - OBJETO
+El Prestador brindará servicios de infraestructura cloud y mantenimiento de servidores por 12 meses.
+
+CLÁUSULA 2 - PAGO
+El Cliente abonará USD 8.000 mensuales, pagaderos dentro de los 45 días de recibida la factura.
+El tipo de cambio aplicable será el dólar MEP del día de facturación.
+
+CLÁUSULA 3 - PLAZO
+El contrato tendrá una vigencia de 12 meses renovables automáticamente por períodos iguales.
+
+CLÁUSULA 4 - CONFIDENCIALIDAD
+Ambas partes mantendrán confidencial la información recibida durante 1 año posterior al contrato.`;
+
+const CLAUSULAS_DB = {
+    objeto: ["objeto", "alcance", "servicios", "desarrollo"],
+    pago: ["pago", "honorario", "monto", "precio", "factur", "cuota"],
+    plazo: ["plazo", "duración", "vigencia", "período", "meses", "renovab"],
+    responsabilidad: ["responsabilidad", "indemniz", "daño", "tope"],
+    confidencialidad: ["confidencial", "secreto", "nda"],
+    propiedad_intelectual: ["propiedad intelectual", "código fuente", "pi ", "frameworks"],
+    rescision: ["rescisión", "terminación", "rescindir", "preaviso"],
+    jurisdiccion: ["jurisdicción", "tribunal", "competencia", "mediación"],
+    penalidad: ["penalidad", "multa", "sanción", "mora"],
+    fuerza_mayor: ["fuerza mayor", "caso fortuito"],
+    no_competencia: ["no competencia", "exclusividad"],
+    garantia: ["garantía", "soporte", "mantenimiento", "bugs"],
+};
+
+const MEJORAS_DB = {
+    responsabilidad: { titulo: "LIMITACIÓN DE RESPONSABILIDAD", texto: "La responsabilidad de cada parte se limita a 3 meses de honorarios por daño directo. Se excluyen dolo y culpa grave.", fundamento: "Art. 1743 CCyC", prioridad: "CRÍTICA" },
+    propiedad_intelectual: { titulo: "PROPIEDAD INTELECTUAL", texto: "Desarrollos específicos → Cliente (post-pago). Frameworks genéricos → Prestador. Transferencia proporcional al pago.", fundamento: "Ley 11.723 + Art. 1794 CCyC", prioridad: "CRÍTICA" },
+    rescision: { titulo: "RESCISIÓN ANTICIPADA", texto: "30 días preaviso. Indemnización: 1 mes de honorarios. Se pagan servicios devengados.", fundamento: "Art. 1078-1079 CCyC", prioridad: "CRÍTICA" },
+    jurisdiccion: { titulo: "JURISDICCIÓN", texto: "Mediación prejudicial obligatoria (30 días). Subsidiariamente, tribunales CABA.", fundamento: "Ley 26.589", prioridad: "IMPORTANTE" },
+    penalidad: { titulo: "MORA EN EL PAGO", texto: "Interés: tasa activa BNA + 5 puntos/día. Superados 15 días, suspensión de obligaciones.", fundamento: "Art. 768 + 1031 CCyC", prioridad: "IMPORTANTE" },
+    fuerza_mayor: { titulo: "FUERZA MAYOR", texto: "No responsabilidad por fuerza mayor. Si supera 30 días, rescisión sin indemnización.", fundamento: "Art. 1730 CCyC", prioridad: "DESEABLE" },
+    garantia: { titulo: "GARANTÍA POST-ENTREGA", texto: "3 meses soporte. Bugs ilimitados. 8hs/mes mejoras incluidas.", fundamento: "Estándar de industria", prioridad: "IMPORTANTE" },
+    no_competencia: { titulo: "NO COMPETENCIA", texto: "6 meses post-contrato, limitada a competidores directos en Argentina.", fundamento: "Razonabilidad contractual", prioridad: "DESEABLE" },
+};
+
+// ─── Motor de análisis ───
+function detectarClausulas(texto) {
+    const lower = texto.toLowerCase();
+    const presentes = [];
+    const faltantes = [];
+    for (const [clausula, keywords] of Object.entries(CLAUSULAS_DB)) {
+        if (keywords.some(kw => lower.includes(kw))) {
+            presentes.push(clausula);
+        } else {
+            faltantes.push(clausula);
+        }
+    }
+    return { presentes, faltantes };
+}
+
+function calcularRiesgo(presentes, faltantes, texto) {
+    const lower = texto.toLowerCase();
+    const riesgos = [];
+
+    // ── Riesgos por cláusulas AUSENTES ──
+    if (!presentes.includes("rescision")) riesgos.push({ severidad: "ALTA", desc: "Sin rescisión — salida conflictiva" });
+    if (!presentes.includes("responsabilidad")) riesgos.push({ severidad: "ALTA", desc: "Sin limitación de responsabilidad" });
+    if (!presentes.includes("jurisdiccion")) riesgos.push({ severidad: "MEDIA", desc: "Sin jurisdicción definida" });
+    if (!presentes.includes("propiedad_intelectual")) riesgos.push({ severidad: "ALTA", desc: "Sin PI — ¿de quién es el trabajo?" });
+    if (!presentes.includes("penalidad") && presentes.includes("pago")) riesgos.push({ severidad: "MEDIA", desc: "Pago sin mora" });
+    if (!presentes.includes("fuerza_mayor")) riesgos.push({ severidad: "BAJA", desc: "Sin fuerza mayor" });
+    if (faltantes.length >= 5) riesgos.push({ severidad: "ALTA", desc: "Contrato muy incompleto" });
+
+    // ── Riesgos por CONTENIDO de cláusulas presentes ──
+
+    // Penalidad excesiva (>15%)
+    const matchMulta = lower.match(/multa[^.]{0,60}(\d+)\s*%/);
+    if (matchMulta && parseInt(matchMulta[1]) > 15) {
+        riesgos.push({ severidad: "ALTA", desc: `Multa excesiva (${matchMulta[1]}%) — supera estándar de mercado (10-15%)` });
+    }
+    // Multa sin intimación previa
+    if (lower.includes("sin necesidad de intimaci") || lower.includes("sin intimaci")) {
+        riesgos.push({ severidad: "ALTA", desc: "Multa sin intimación previa — vulnera derecho de defensa" });
+    }
+
+    // Jurisdicción extranjera
+    const paisesExtranjeros = ["uruguay", "montevideo", "brasil", "chile", "paraguay", "bolivia", "perú", "colombia", "méxico", "estados unidos", "usa", "nueva york", "miami", "delaware"];
+    for (const pais of paisesExtranjeros) {
+        if (lower.includes(pais) && presentes.includes("jurisdiccion")) {
+            riesgos.push({ severidad: "ALTA", desc: `Jurisdicción extranjera (${pais}) — litigar fuera implica costos altísimos` });
+            break;
+        }
+    }
+    // Renuncia a fuero
+    if (lower.includes("renunciando") && (lower.includes("fuero") || lower.includes("otro fuero"))) {
+        riesgos.push({ severidad: "MEDIA", desc: "Renuncia a fuero propio — limita opciones de litigio" });
+    }
+
+    // Rescisión unilateral asimétrica
+    if (presentes.includes("rescision")) {
+        const tieneUnilateral = lower.includes("unilateral") || lower.includes("sin causa");
+        const soloCliente = lower.includes("el cliente podr") && !lower.includes("el prestador podr");
+        const sinPenalidad = lower.includes("sin penalidad") || lower.includes("sin indemnizaci");
+        if (tieneUnilateral && soloCliente) {
+            riesgos.push({ severidad: "ALTA", desc: "Rescisión unilateral solo para cliente — asimetría contractual" });
+        }
+        if (tieneUnilateral && sinPenalidad) {
+            riesgos.push({ severidad: "MEDIA", desc: "Rescisión sin penalidad — prestador queda desprotegido" });
+        }
+        // Preaviso muy corto
+        const matchPreaviso = lower.match(/preaviso\s+de\s+(\d+)\s+d/);
+        if (matchPreaviso && parseInt(matchPreaviso[1]) < 30) {
+            riesgos.push({ severidad: "MEDIA", desc: `Preaviso de solo ${matchPreaviso[1]} días — insuficiente para reorganizarse` });
+        }
+    }
+
+    // PI se transfiere totalmente
+    if (presentes.includes("propiedad_intelectual")) {
+        if (lower.includes("propiedad exclusiva del cliente") || lower.includes("propiedad exclusiva de") && lower.includes("cliente")) {
+            riesgos.push({ severidad: "MEDIA", desc: "PI 100% al cliente — prestador pierde frameworks y herramientas genéricas" });
+        }
+    }
+
+    // Limitación de responsabilidad débil
+    if (lower.includes("monto efectivamente cobrado") || lower.includes("monto cobrado")) {
+        riesgos.push({ severidad: "MEDIA", desc: "Responsabilidad limitada a lo cobrado — no cubre lucro cesante ni daños" });
+    }
+
+    // Confidencialidad corta (<5 años)
+    const matchConf = lower.match(/confidencial[^.]{0,80}(\d+)\s+a[ñn]os?/);
+    if (matchConf && parseInt(matchConf[1]) < 5) {
+        riesgos.push({ severidad: "BAJA", desc: `Confidencialidad corta (${matchConf[1]} años) — estándar es 5 años` });
+    }
+
+    const pesos = { ALTA: 30, MEDIA: 15, BAJA: 5 };
+    const score = Math.min(riesgos.reduce((s, r) => s + pesos[r.severidad], 0), 100);
+    const nivel = score >= 60 ? "ALTO" : score >= 30 ? "MEDIO" : "BAJO";
+    return { riesgos, score, nivel };
+}
+
+function analizar(texto, capa) {
+    const { presentes, faltantes } = detectarClausulas(texto);
+    const { riesgos, score, nivel } = calcularRiesgo(presentes, faltantes, texto);
+
+    // Mejoras para cláusulas faltantes + presentes con problemas
+    const mejoras = faltantes.filter(c => MEJORAS_DB[c]).map(c => MEJORAS_DB[c]);
+    // También sugerir mejoras para cláusulas presentes que tienen riesgos
+    presentes.forEach(c => {
+        if (MEJORAS_DB[c] && riesgos.some(r => r.desc.toLowerCase().includes(c.replace("_", " ")) ||
+            (c === "penalidad" && r.desc.toLowerCase().includes("multa")) ||
+            (c === "jurisdiccion" && r.desc.toLowerCase().includes("jurisdicci")) ||
+            (c === "rescision" && r.desc.toLowerCase().includes("rescisi")) ||
+            (c === "propiedad_intelectual" && r.desc.toLowerCase().includes("pi "))
+        )) {
+            mejoras.push({ ...MEJORAS_DB[c], titulo: "MEJORAR: " + MEJORAS_DB[c].titulo });
+        }
+    });
+
+    const nextSteps = [];
+    const criticas = mejoras.filter(m => m.prioridad === "CRÍTICA");
+    const importantes = mejoras.filter(m => m.prioridad === "IMPORTANTE");
+    if (criticas.length) nextSteps.push({ paso: `Proponer ${criticas.length} cláusula(s) crítica(s)`, urgencia: "INMEDIATO" });
+    if (importantes.length) nextSteps.push({ paso: `Negociar ${importantes.length} cláusula(s) importante(s)`, urgencia: "ESTA_SEMANA" });
+    nextSteps.push({ paso: "Enviar mejoras a contraparte", urgencia: "INMEDIATO" });
+    nextSteps.push({ paso: "Revisar respuesta y ajustar", urgencia: "ANTES_DE_FIRMAR" });
+
+    return { presentes, faltantes, riesgos, score, nivel, mejoras, nextSteps, capa };
+}
+
+// ─── Render ───
+function renderResultado(r) {
+    const nivelClass = r.nivel.toLowerCase();
+    const nivelEmoji = { ALTO: "🔴", MEDIO: "🟡", BAJO: "🟢" }[r.nivel];
+    const scoreColor = r.nivel === "ALTO" ? "var(--red)" : r.nivel === "MEDIO" ? "var(--yellow)" : "var(--green)";
+    const recomendacion = r.nivel === "ALTO" ? "NO FIRMAR — Negociar primero" : r.nivel === "MEDIO" ? "NEGOCIAR — Corregir puntos señalados" : "APROBAR — Contrato equilibrado";
+
+    let html = `<div class="fade-in">`;
+
+    // Riesgo
+    html += `<div class="result-section">
+        <h3>Nivel de Riesgo</h3>
+        <div class="risk-badge risk-${nivelClass}">${nivelEmoji} ${r.nivel} — Score: ${r.score}/100</div>
+        <div class="score-bar"><div class="score-fill" style="width:${r.score}%; background:${scoreColor}"></div></div>
+        <p style="margin-top:12px; font-size:14px; font-weight:600;">${recomendacion}</p>
+    </div>`;
+
+    // Red flags — ordenados ALTA → MEDIA → BAJA
+    const ordenSeveridad = { ALTA: 0, MEDIA: 1, BAJA: 2 };
+    const riesgosOrdenados = [...r.riesgos].sort((a, b) => ordenSeveridad[a.severidad] - ordenSeveridad[b.severidad]);
+    html += `<div class="result-section"><h3>Red Flags (${riesgosOrdenados.length})</h3>`;
+    riesgosOrdenados.forEach(risk => {
+        html += `<div class="risk-item ${risk.severidad.toLowerCase()}">[${risk.severidad}] ${risk.desc}</div>`;
+    });
+    html += `</div>`;
+
+    // Cláusulas detectadas — las que tienen riesgo llevan ancla a mejora
+    html += `<div class="result-section"><h3>Cláusulas detectadas</h3><div class="clausula-list">`;
+    r.presentes.forEach(c => {
+        const tieneRiesgo = r.mejoras.some(m => m.titulo.includes(MEJORAS_DB[c]?.titulo || "---"));
+        if (tieneRiesgo) {
+            html += `<a href="#mejora-${c}" class="clausula-tag tag-riesgo" title="Ver mejora sugerida">⚠ ${c}</a>`;
+        } else {
+            html += `<span class="clausula-tag tag-presente">✓ ${c}</span>`;
+        }
+    });
+    r.faltantes.forEach(c => {
+        const tieneMejora = MEJORAS_DB[c];
+        if (tieneMejora) {
+            html += `<a href="#mejora-${c}" class="clausula-tag tag-faltante" title="Ver mejora sugerida">✗ ${c}</a>`;
+        } else {
+            html += `<span class="clausula-tag tag-faltante">✗ ${c}</span>`;
+        }
+    });
+    html += `</div></div>`;
+
+    // Mejoras (solo capa 2+)
+    if (r.capa >= 2 && r.mejoras.length) {
+        // Sección 1: Diagnóstico — qué hay que mejorar y por qué
+        html += `<div class="result-section"><h3>📋 Diagnóstico de cláusulas</h3>`;
+        r.mejoras.forEach((m, i) => {
+            const prioClass = m.prioridad === "CRÍTICA" ? "critica" : m.prioridad === "IMPORTANTE" ? "importante" : "deseable";
+            const esPresente = m.titulo.startsWith("MEJORAR:");
+            const explicacion = esPresente
+                ? "Esta cláusula existe pero tiene problemas que generan riesgo. Se recomienda renegociar su redacción."
+                : "Esta cláusula no está en el contrato. Su ausencia genera exposición legal.";
+            const tituloLimpio = m.titulo.replace("MEJORAR: ", "");
+            // Derivar el key para el ancla
+            const key = Object.keys(MEJORAS_DB).find(k => MEJORAS_DB[k].titulo === tituloLimpio) || `item-${i}`;
+            html += `<div class="mejora-card diagnostico" id="mejora-${key}">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                    <span class="prio prio-${prioClass}">${m.prioridad}</span>
+                    <span style="font-size:11px; color:var(--text-light); background:${esPresente ? '#fef3c7' : '#fce7f3'}; padding:2px 8px; border-radius:4px;">${esPresente ? '⚠ PRESENTE — RENEGOCIAR' : '✗ AUSENTE — AGREGAR'}</span>
+                </div>
+                <h4>${tituloLimpio}</h4>
+                <p style="font-size:13px; color:var(--text-light); margin:6px 0;">${explicacion}</p>
+                <a href="#propuesta-${key}" style="font-size:12px; color:var(--accent); text-decoration:none;">↓ Ver propuesta de mejora</a>
+            </div>`;
+        });
+        html += `</div>`;
+
+        // Sección 2: Propuestas de mejora — texto listo para enviar
+        html += `<div class="result-section"><h3>✍️ Propuestas de mejora — Texto listo para enviar</h3>`;
+        r.mejoras.forEach((m, i) => {
+            const prioClass = m.prioridad === "CRÍTICA" ? "critica" : m.prioridad === "IMPORTANTE" ? "importante" : "deseable";
+            const tituloLimpio = m.titulo.replace("MEJORAR: ", "");
+            const key = Object.keys(MEJORAS_DB).find(k => MEJORAS_DB[k].titulo === tituloLimpio) || `item-${i}`;
+            html += `<div class="mejora-card propuesta" id="propuesta-${key}">
+                <span class="prio prio-${prioClass}">${m.prioridad}</span>
+                <h4>${tituloLimpio}</h4>
+                <div class="texto">"${m.texto}"</div>
+                <div class="fund">⚖️ ${m.fundamento}</div>
+                <a href="#mejora-${key}" style="font-size:11px; color:var(--text-light); text-decoration:none; margin-top:4px; display:inline-block;">↑ Volver al diagnóstico</a>
+            </div>`;
+        });
+        html += `</div>`;
+    }
+
+    // Next steps (solo capa 2+) — formato párrafo con guión de acción
+    if (r.capa >= 2) {
+        const criticas = r.mejoras.filter(m => m.prioridad === "CRÍTICA");
+        const importantes = r.mejoras.filter(m => m.prioridad === "IMPORTANTE");
+        const deseables = r.mejoras.filter(m => m.prioridad === "DESEABLE");
+
+        html += `<div class="result-section"><h3>🚀 Plan de acción</h3><div style="display:flex; flex-direction:column; gap:12px;">`;
+
+        if (criticas.length) {
+            html += `<div class="step-paragraph inmediato">
+                <strong>— INMEDIATO:</strong> Antes de cualquier otra cosa, redactar y enviar a la contraparte las ${criticas.length} cláusula(s) crítica(s) identificadas (${criticas.map(c => c.titulo.replace("MEJORAR: ","")).join(", ")}). Estas representan los mayores riesgos del contrato y deben resolverse antes de avanzar con la negociación.
+            </div>`;
+        }
+        if (importantes.length) {
+            html += `<div class="step-paragraph semana">
+                <strong>— ESTA SEMANA:</strong> Proponer la incorporación o renegociación de ${importantes.length} cláusula(s) importante(s) (${importantes.map(c => c.titulo.replace("MEJORAR: ","")).join(", ")}). Incluir los textos sugeridos arriba como base de negociación y solicitar respuesta formal.
+            </div>`;
+        }
+        if (deseables.length) {
+            html += `<div class="step-paragraph deseable">
+                <strong>— ANTES DE FIRMAR:</strong> Evaluar la inclusión de ${deseables.length} cláusula(s) deseable(s) (${deseables.map(c => c.titulo.replace("MEJORAR: ","")).join(", ")}). Si bien no son bloqueantes, fortalecen la posición contractual y reducen riesgo a futuro.
+            </div>`;
+        }
+
+        html += `<div class="step-paragraph firmar">
+            <strong>— CIERRE:</strong> Una vez recibida la respuesta de la contraparte, revisar el nuevo borrador contra este análisis. Verificar que cada punto crítico haya sido incorporado o negociado. Recién entonces proceder a la firma con asesoría legal presencial.
+        </div>`;
+
+        html += `</div></div>`;
+    }
+
+    html += `</div>`;
+    return html;
+}
+
+// ─── UI Logic ───
+const textarea = document.getElementById("contrato-input");
+const output = document.getElementById("output");
+const btnAnalizar = document.getElementById("btn-analizar");
+const capaSelect = document.getElementById("capa-select");
+const fileDrop = document.getElementById("file-drop");
+const fileInput = document.getElementById("file-input");
+const tabs = document.querySelectorAll(".tab");
+
+// Tabs
+tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+        tabs.forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        const mode = tab.dataset.tab;
+        textarea.style.display = mode === "paste" ? "block" : "none";
+        fileDrop.style.display = mode === "file" ? "block" : "none";
+        if (mode === "demo") {
+            textarea.style.display = "block";
+            textarea.value = CONTRATO_DEMO;
+        }
+    });
+});
+
+// File handling
+fileDrop.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            textarea.value = ev.target.result;
+            textarea.style.display = "block";
+            fileDrop.style.display = "none";
+            tabs.forEach(t => t.classList.remove("active"));
+            tabs[0].classList.add("active");
+        };
+        reader.readAsText(file);
+    }
+});
+
+// Analyze
+btnAnalizar.addEventListener("click", () => {
+    const texto = textarea.value.trim();
+    if (!texto) {
+        output.innerHTML = `<div class="output-placeholder"><div class="icon">⚠️</div><p>Pegá un contrato primero</p></div>`;
+        return;
+    }
+
+    // Show loading
+    output.innerHTML = `<div class="loading"><div class="spinner"></div><p>Analizando contrato...</p></div>`;
+
+    // Simulate processing time
+    setTimeout(() => {
+        const capa = parseInt(capaSelect.value);
+        const resultado = analizar(texto, capa);
+        output.innerHTML = renderResultado(resultado);
+    }, 1200);
+});
+</script>
+
+</body>
+</html>

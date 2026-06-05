@@ -1,0 +1,54 @@
+CONTRATO DE DESARROLLO DE PLATAFORMA E-COMMERCE
+
+Entre Palatini Group S.A., CUIT 30-71999222-7, representada por Teo Palatini en su carácter de Director (en adelante 'el Cliente'), y DigitalWave S.R.L., CUIT 30-71555888-4, con domicilio en Av. del Libertador 6250, Piso 3, CABA, representada por Mariana Torres en su carácter de CEO (en adelante 'el Prestador'):
+
+CLAUSULA 1 - OBJETO
+El Prestador se compromete a desarrollar una plataforma de comercio electrónico para el Cliente que incluye: (a) tienda online con catálogo de 500+ productos; (b) integración con MercadoPago y Stripe; (c) panel de administración con gestión de inventario; (d) aplicación mobile para iOS y Android en React Native; (e) integración con sistema de facturación AFIP. El alcance detallado se especifica en el Anexo Técnico adjunto.
+
+CLAUSULA 2 - PLAZO
+El desarrollo tendrá una duración de 16 semanas, seguido de 4 semanas de testing y QA, contados desde la firma del contrato y entrega de accesos por parte del Cliente. El soporte post-lanzamiento se extenderá por 6 meses desde la aceptación final de la plataforma.
+
+CLAUSULA 3 - MONTO Y FORMA DE PAGO
+[OPCIÓN A] El precio total es de USD 40.000, pagaderos en 4 cuotas mensuales de USD 10.000. [OPCIÓN B] El precio total es de USD 38.000, excluyendo la app mobile que se presupuestará como Fase 2. Las facturas se emitirán en pesos argentinos al tipo de cambio dólar MEP publicado por el BCRA en la fecha de emisión. Factura tipo A.
+
+CLAUSULA 4 - PLAZO Y MORA EN EL PAGO
+El Cliente abonará cada factura dentro de los 45 días corridos de recibida. En caso de mora, se aplicará un interés del 2% mensual sobre el monto impago. Si la mora supera los 45 días, el Prestador podrá suspender el desarrollo previa notificación fehaciente, sin que ello constituya incumplimiento contractual. Los trabajos se reanudarán dentro de los 5 días hábiles de regularizado el pago.
+
+CLAUSULA 5 - PROPIEDAD INTELECTUAL
+Todo código fuente, diseños, documentación y assets desarrollados específicamente para el proyecto serán propiedad exclusiva del Cliente una vez abonada la totalidad de los honorarios. El Prestador retiene el derecho de utilizar y reutilizar librerías, componentes genéricos, frameworks y herramientas que: (a) hayan sido desarrollados con anterioridad al proyecto, o (b) constituyan herramientas de uso interno del Prestador que no contengan información confidencial ni lógica de negocio del Cliente.
+
+CLAUSULA 6 - PENALIDAD POR DEMORA
+Si el proyecto excede los plazos establecidos por causas atribuibles al Prestador, el Cliente tendrá derecho a un descuento del [3% | 5%] del monto total por cada semana completa de demora, con un tope máximo del [15% | 20%]. Recíprocamente, si el Cliente demora en entregar feedback, aprobaciones, contenido o accesos por más de 5 días hábiles desde la solicitud formal, el cronograma se extenderá automáticamente por igual cantidad de días sin que ello constituya demora del Prestador.
+
+CLAUSULA 7 - GARANTÍA Y SOPORTE POST-LANZAMIENTO
+Durante los 6 meses de soporte post-lanzamiento, el Prestador garantiza: (a) corrección ilimitada de bugs y errores de funcionamiento; (b) [8 | 20] horas mensuales de mejoras menores incluidas; (c) horas adicionales de mejoras a una tarifa de USD 75 por hora. Se consideran bugs los defectos que impidan el funcionamiento conforme a las especificaciones del Anexo Técnico.
+
+CLAUSULA 8 - CONFIDENCIALIDAD
+Ambas partes se obligan a mantener estricta confidencialidad sobre toda información técnica, comercial, financiera y estratégica a la que accedan en virtud del presente contrato. Esta obligación se extiende por 2 años posteriores a la finalización del contrato. Se exceptúa la información que sea de dominio público o requerida por autoridad competente.
+
+CLAUSULA 9 - NO COMPETENCIA
+El Prestador se compromete a no prestar servicios de desarrollo de plataformas de e-commerce a empresas que comercialicen [exactamente el mismo tipo de producto que el Cliente | productos del mismo sector] en Argentina, durante la vigencia del contrato y por un período de [6 | 12] meses posteriores a su finalización.
+
+CLAUSULA 10 - EQUIPO DE TRABAJO
+El Prestador asignará al proyecto el siguiente equipo mínimo: 1 Tech Lead senior, 2 desarrolladores full-stack, 1 diseñador UX/UI y 1 QA engineer. Cualquier cambio en el equipo asignado deberá ser notificado al Cliente con 5 días hábiles de anticipación, manteniendo un nivel de seniority equivalente.
+
+CLAUSULA 11 - JURISDICCIÓN
+Para toda controversia derivada del presente contrato, las partes se someten a mediación prejudicial obligatoria. De no alcanzarse acuerdo, serán competentes los tribunales ordinarios de la Ciudad Autónoma de Buenos Aires.
+
+--- CLAUSULAS SUGERIDAS (REVISAR ANTES DE INCLUIR) ---
+
+RESCISIÓN ANTICIPADA
+Cualquiera de las partes podrá rescindir el contrato con 15 días de preaviso fehaciente. En caso de rescisión sin causa por parte del Cliente, deberá abonar los trabajos efectivamente realizados más un 20% del saldo pendiente como lucro cesante. En caso de rescisión por parte del Prestador, deberá completar la transferencia del código y documentación al Cliente o a quien este designe.
+Justificacion: Ningún email menciona rescisión. Sin esta cláusula, una salida genera disputa automática. Especialmente relevante en un proyecto de 8+ meses.
+
+SLA DE SOPORTE
+Durante el soporte, el Prestador garantiza respuesta en 4 horas hábiles para incidentes críticos (plataforma caída o imposibilidad de procesar pagos) y 24 horas hábiles para incidentes no críticos.
+Justificacion: Se acordaron 6 meses de soporte pero sin definir nivel de servicio. Sin SLA, 'soporte' puede significar cualquier cosa.
+
+FUERZA MAYOR
+Ninguna parte será responsable por incumplimientos derivados de fuerza mayor (Art. 1730 CCyC). Si el evento supera 30 días, cualquier parte puede rescindir sin indemnización, abonándose trabajos realizados.
+Justificacion: Proyecto de 8 meses en Argentina. Crisis cambiaria, regulatoria o tecnológica pueden impactar. Protege a ambas partes.
+
+ACEPTACIÓN Y TESTING
+El Cliente dispondrá de 10 días hábiles para aceptar o rechazar cada entregable. El rechazo debe ser fundado por escrito con detalle de los defectos. Si el Cliente no responde en plazo, el entregable se considerará aceptado.
+Justificacion: No se definió proceso de aceptación. Sin esto, el Prestador puede entregar y el Cliente nunca 'aceptar' formalmente, bloqueando los pagos.

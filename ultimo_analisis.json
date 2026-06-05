@@ -1,0 +1,56 @@
+{
+  "resumen": {
+    "partes": [
+      "TECHSTART S.A. (Cliente)",
+      "CONSULTORA XYZ S.R.L. (Prestador)"
+    ],
+    "objeto": "Servicios de consultoría tecnológica",
+    "duracion": "12 meses",
+    "monto": "USD 5.000 mensuales (USD 60.000 total)"
+  },
+  "riesgo_general": {
+    "nivel": "ALTO",
+    "explicacion": "Múltiples cláusulas desequilibradas que exponen al Prestador a pérdidas significativas"
+  },
+  "red_flags": [
+    {
+      "clausula": "Cláusula 1 - Objeto",
+      "problema": "Alcance vago: 'consultoría tecnológica' sin entregables, metodología ni métricas de cumplimiento",
+      "severidad": "ALTA"
+    },
+    {
+      "clausula": "Cláusula 2 - Plazo de pago",
+      "problema": "60 días es excesivo; el estándar en servicios profesionales es 30 días. Problema grave de flujo de caja",
+      "severidad": "ALTA"
+    },
+    {
+      "clausula": "Cláusula 2 - Moneda",
+      "problema": "Pago en USD sin tipo de cambio definido (oficial, MEP, CCL). Ambigüedad bajo normativa cambiaria BCRA",
+      "severidad": "ALTA"
+    },
+    {
+      "clausula": "Cláusula 3 - Limitación de responsabilidad",
+      "problema": "Tope de USD 1.000 es el 2% del valor mensual. Desproporcionado, posible cláusula abusiva (Art. 1743 CCyC)",
+      "severidad": "ALTA"
+    },
+    {
+      "clausula": "Cláusula 4 - Confidencialidad",
+      "problema": "No define qué es confidencial, sin excepciones estándar ni plazo post-contrato",
+      "severidad": "MEDIA"
+    },
+    {
+      "clausula": "Cláusula 5 - Rescisión",
+      "problema": "7 días de preaviso es insuficiente para 12 meses de contrato. Sin indemnización por rescisión anticipada",
+      "severidad": "ALTA"
+    }
+  ],
+  "recomendacion": {
+    "accion": "NEGOCIAR",
+    "razon": "Estructura base utilizable pero 4 cláusulas de severidad alta deben corregirse antes de firmar. Riesgo desproporcionado para el Prestador."
+  },
+  "proximos_pasos": [
+    "Redefinir objeto (Cláusula 1): agregar Anexo de Alcance con entregables concretos",
+    "Renegociar pago a 30 días, tope de responsabilidad a mínimo 3 meses, preaviso a 30 días con penalidad",
+    "Definir tipo de cambio aplicable para conversión a pesos o pactar ajuste indexado"
+  ]
+}
