@@ -242,20 +242,25 @@ def construir_flujo(modo: str, model: str) -> list[PasoAgente]:
     ]
 
 
-def ejecutar_workflow(contrato: str, modo: str, model: str) -> Contexto:
+def ejecutar_workflow(
+    contrato: str, modo: str, model: str, verbose: bool = True
+) -> Contexto:
     contexto: Contexto = {"contrato": contrato}
     flujo = construir_flujo(modo, model)
 
-    print("\n=== LEGALFLOW WORKFLOW ===")
-    print(f"Modo: {modo}")
-    if modo == "sdk":
-        print(f"Modelo: {model}")
+    if verbose:
+        print("\n=== LEGALFLOW WORKFLOW ===")
+        print(f"Modo: {modo}")
+        if modo == "sdk":
+            print(f"Modelo: {model}")
 
     for paso in flujo:
-        print(f"\n[Ejecutando] Agente: {paso.nombre}")
+        if verbose:
+            print(f"\n[Ejecutando] Agente: {paso.nombre}")
         salida = paso.accion(contexto)
         contexto.update(salida)
-        print(f"[OK] Output {paso.nombre}: {json.dumps(salida, ensure_ascii=True)}")
+        if verbose:
+            print(f"[OK] Output {paso.nombre}: {json.dumps(salida, ensure_ascii=True)}")
 
     return contexto
 
@@ -310,7 +315,7 @@ def main() -> None:
     contrato = contrato_demo() if args.demo else leer_contrato_stdin()
 
     try:
-        resultado = ejecutar_workflow(contrato, args.modo, args.model)
+        resultado = ejecutar_workflow(contrato, args.modo, args.model, verbose=True)
     except ErrorWorkflow as err:
         print(f"\n[ERROR] {err}")
         return

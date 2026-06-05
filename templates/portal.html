@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LegalFlow | Portal de Analisis</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #f4f6fb; color: #1d2433; }
+    .container { max-width: 980px; margin: 0 auto; padding: 24px; }
+    .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.06); margin-bottom: 20px; }
+    h1 { margin: 0 0 8px; }
+    .muted { color: #60708a; margin-top: 0; }
+    label { display: block; font-weight: 700; margin: 14px 0 8px; }
+    textarea, select, input[type="text"], input[type="file"] { width: 100%; padding: 10px; border: 1px solid #ccd4e0; border-radius: 8px; font-size: 14px; }
+    textarea { min-height: 180px; resize: vertical; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .btn { background: #3f51e5; color: white; border: none; border-radius: 8px; padding: 12px 16px; cursor: pointer; font-weight: 700; margin-top: 16px; }
+    .btn:disabled { opacity: 0.7; cursor: wait; }
+    .error { background: #ffe9e9; color: #a02222; border: 1px solid #f4b2b2; padding: 10px; border-radius: 8px; display: none; margin-top: 12px; }
+    .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .pill { display: inline-block; background: #eef2ff; color: #2f3dd6; border-radius: 999px; padding: 4px 10px; margin: 4px 6px 0 0; font-size: 12px; }
+    .risk { border-left: 4px solid #f0a30a; padding: 10px; background: #fff9e9; border-radius: 8px; margin-bottom: 8px; }
+    pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; }
+    @media (max-width: 760px) { .row, .result-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>LegalFlow - Portal para clientes</h1>
+      <p class="muted">Subi o pega un contrato y obtene analisis por agentes en cadena.</p>
+
+      <form id="analysis-form">
+        <div class="row">
+          <div>
+            <label for="modo">Modo</label>
+            <select id="modo" name="modo">
+              <option value="local">local (sin API)</option>
+              <option value="sdk">sdk (agentes reales)</option>
+            </select>
+          </div>
+          <div>
+            <label for="modelo">Modelo (solo sdk)</label>
+            <input id="modelo" name="modelo" type="text" value="composer-2.5" />
+          </div>
+        </div>
+
+        <label for="archivo">Subir archivo .txt (opcional)</label>
+        <input id="archivo" name="archivo" type="file" accept=".txt" />
+
+        <label for="contrato">O pegar contrato</label>
+        <textarea id="contrato" name="contrato" placeholder="Pega aqui el texto del contrato..."></textarea>
+
+        <button class="btn" id="submit-btn" type="submit">Analizar contrato</button>
+        <div class="error" id="error-box"></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Resultado</h2>
+      <div id="empty">Todavia no hay analisis.</div>
+      <div id="resultado" style="display:none;">
+        <div class="result-grid">
+          <div>
+            <h3>Resumen</h3>
+            <pre id="resumen"></pre>
+          </div>
+          <div>
+            <h3>Accion recomendada</h3>
+            <pre id="accion"></pre>
+          </div>
+        </div>
+
+        <h3>Clausulas detectadas</h3>
+        <div id="clausulas"></div>
+
+        <h3>Riesgos detectados</h3>
+        <div id="riesgos"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById("analysis-form");
+    const btn = document.getElementById("submit-btn");
+    const errorBox = document.getElementById("error-box");
+    const emptyState = document.getElementById("empty");
+    const resultBox = document.getElementById("resultado");
+    const resumen = document.getElementById("resumen");
+    const accion = document.getElementById("accion");
+    const clausulas = document.getElementById("clausulas");
+    const riesgos = document.getElementById("riesgos");
+
+    function showError(message) {
+      errorBox.textContent = message;
+      errorBox.style.display = "block";
+    }
+
+    function clearError() {
+      errorBox.textContent = "";
+      errorBox.style.display = "none";
+    }
+
+    function normalizeRiesgos(data) {
+      if (!data) return [];
+      if (Array.isArray(data)) return data;
+      return [{ riesgo: String(data), nivel: "medio", recomendacion: "" }];
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      clearError();
+      btn.disabled = true;
+      btn.textContent = "Analizando...";
+
+      const formData = new FormData(form);
+      try {
+        const response = await fetch("/api/analizar", { method: "POST", body: formData });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || "Error al analizar");
+        }
+
+        const r = data.resultado;
+        resumen.textContent = r.resumen_final || "Sin resumen.";
+        accion.textContent = r.accion_recomendada || "Sin accion recomendada.";
+
+        clausulas.innerHTML = "";
+        (r.clausulas_detectadas || []).forEach((c) => {
+          const span = document.createElement("span");
+          span.className = "pill";
+          span.textContent = c;
+          clausulas.appendChild(span);
+        });
+
+        riesgos.innerHTML = "";
+        normalizeRiesgos(r.riesgos_detectados).forEach((item) => {
+          const div = document.createElement("div");
+          div.className = "risk";
+          const nivel = (item.nivel || "medio").toUpperCase();
+          const rec = item.recomendacion ? `\nRecomendacion: ${item.recomendacion}` : "";
+          div.textContent = `[${nivel}] ${item.riesgo || item}${rec}`;
+          riesgos.appendChild(div);
+        });
+
+        emptyState.style.display = "none";
+        resultBox.style.display = "block";
+      } catch (err) {
+        showError(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Analizar contrato";
+      }
+    });
+  </script>
+</body>
+</html>
