@@ -4,3 +4,8 @@ __pycache__/
 venv/
 .claude/
 .vercel
+data/audit.jsonl
+data/metrics.jsonl
+data/memory/
+data/runs/
+data/cases/

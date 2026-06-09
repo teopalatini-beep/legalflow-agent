@@ -1,0 +1,19 @@
+{
+  "cliente": "default",
+  "clausulas_preferidas": [
+    "confidencialidad",
+    "responsabilidad",
+    "jurisdiccion",
+    "rescision"
+  ],
+  "red_flags_criticos": [
+    "jurisdiccion extranjera",
+    "multa sin intimacion",
+    "rescision unilateral asimetrica"
+  ],
+  "jurisdicciones_permitidas": [
+    "caba",
+    "provincia de buenos aires"
+  ],
+  "tono_negociacion": "firme y colaborativo"
+}

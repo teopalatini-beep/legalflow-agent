@@ -3,154 +3,361 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LegalFlow | Portal de Analisis</title>
+  <title>LegalFlow | Analysis Workspace</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #f4f6fb; color: #1d2433; }
-    .container { max-width: 980px; margin: 0 auto; padding: 24px; }
-    .card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.06); margin-bottom: 20px; }
-    h1 { margin: 0 0 8px; }
-    .muted { color: #60708a; margin-top: 0; }
-    label { display: block; font-weight: 700; margin: 14px 0 8px; }
-    textarea, select, input[type="text"], input[type="file"] { width: 100%; padding: 10px; border: 1px solid #ccd4e0; border-radius: 8px; font-size: 14px; }
-    textarea { min-height: 180px; resize: vertical; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .btn { background: #3f51e5; color: white; border: none; border-radius: 8px; padding: 12px 16px; cursor: pointer; font-weight: 700; margin-top: 16px; }
-    .btn:disabled { opacity: 0.7; cursor: wait; }
-    .error { background: #ffe9e9; color: #a02222; border: 1px solid #f4b2b2; padding: 10px; border-radius: 8px; display: none; margin-top: 12px; }
-    .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .pill { display: inline-block; background: #eef2ff; color: #2f3dd6; border-radius: 999px; padding: 4px 10px; margin: 4px 6px 0 0; font-size: 12px; }
-    .risk { border-left: 4px solid #f0a30a; padding: 10px; background: #fff9e9; border-radius: 8px; margin-bottom: 8px; }
-    pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; }
-    @media (max-width: 760px) { .row, .result-grid { grid-template-columns: 1fr; } }
+    :root {
+      --bg: #f3f5fb;
+      --card: #ffffff;
+      --text: #1f2b3d;
+      --muted: #5e6b81;
+      --line: #dce2ef;
+      --primary: #4156e8;
+      --good: #0f9d58;
+      --warn: #db8b00;
+      --danger: #d63a49;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Arial, sans-serif; color: var(--text); background: var(--bg); }
+    .topbar { background: #111827; color: #fff; padding: 14px 22px; font-weight: 700; }
+    .topbar small { color: #9ca3af; font-weight: 400; margin-left: 8px; }
+    .layout { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 14px; padding: 14px; height: calc(100vh - 52px); }
+    .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; display: flex; flex-direction: column; min-height: 0; }
+    .panel-head { padding: 12px 14px; border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 700; }
+    .panel-body { padding: 12px 14px; overflow: auto; }
+    .field { margin-bottom: 10px; }
+    label { display: block; margin-bottom: 5px; font-size: 12px; color: var(--muted); font-weight: 700; }
+    textarea, input, select { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 9px; font-size: 13px; }
+    textarea { min-height: 160px; resize: vertical; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    button { border: 0; border-radius: 8px; padding: 10px 12px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-secondary { background: #edf1ff; color: #1e2f8f; }
+    .btn-ghost { background: #f7f9ff; color: #3a4a63; border: 1px solid var(--line); }
+    .error { display: none; margin-top: 8px; background: #ffe9ea; color: #942737; padding: 8px 10px; border-radius: 8px; font-size: 12px; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .tag { display: inline-block; font-size: 11px; padding: 3px 8px; border-radius: 999px; margin: 2px 6px 2px 0; background: #e9edff; color: #2a3fbe; }
+    .risk { border: 1px solid var(--line); border-left: 4px solid var(--warn); border-radius: 8px; padding: 10px; margin-bottom: 10px; font-size: 13px; }
+    .risk.high { border-left-color: var(--danger); }
+    .risk.low { border-left-color: var(--good); }
+    .risk-head { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+    .confidence { font-size: 11px; color: var(--muted); }
+    .evidence { margin-top: 8px; font-size: 12px; color: #30415f; background: #f4f7ff; border-radius: 6px; padding: 6px; }
+    .decision { margin-top: 8px; display: flex; gap: 6px; }
+    .decision button { padding: 6px 8px; font-size: 11px; border: 1px solid var(--line); background: #fff; color: #2f3c57; }
+    .decision .selected { background: #e7edff; border-color: #90a0ff; color: #1f2ea2; }
+    .redline { border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-bottom: 10px; font-size: 13px; }
+    pre { white-space: pre-wrap; margin: 0; font-size: 12px; background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 10px; }
+    @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; height: auto; } }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="card">
-      <h1>LegalFlow - Portal para clientes</h1>
-      <p class="muted">Subi o pega un contrato y obtene analisis por agentes en cadena.</p>
-
-      <form id="analysis-form">
-        <div class="row">
-          <div>
-            <label for="modo">Modo</label>
-            <select id="modo" name="modo">
-              <option value="local">local (sin API)</option>
-              <option value="sdk">sdk (agentes reales)</option>
-            </select>
+  <div class="topbar">LegalFlow Workspace <small>ExtractorAgent -> RiskAgent -> RedlineAgent -> VerifierAgent</small></div>
+  <div class="layout">
+    <section class="panel">
+      <div class="panel-head">Panel 1 · Contrato y configuracion</div>
+      <div class="panel-body">
+        <form id="analysis-form">
+          <div class="row">
+            <div class="field">
+              <label for="modo">Modo</label>
+              <select id="modo" name="modo">
+                <option value="local">local</option>
+                <option value="sdk">sdk</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="modelo">Modelo</label>
+              <input id="modelo" name="modelo" value="composer-2.5">
+            </div>
           </div>
-          <div>
-            <label for="modelo">Modelo (solo sdk)</label>
-            <input id="modelo" name="modelo" type="text" value="composer-2.5" />
+          <div class="row">
+            <div class="field">
+              <label for="cliente_id">Cliente / Playbook</label>
+              <input id="cliente_id" name="cliente_id" value="default">
+            </div>
+            <div class="field">
+              <label for="modo_analisis">Modo analisis</label>
+              <select id="modo_analisis" name="modo_analisis">
+                <option value="general">general</option>
+                <option value="strict_playbook">strict_playbook</option>
+                <option value="counterparty_negotiation">counterparty_negotiation</option>
+              </select>
+            </div>
           </div>
-        </div>
-
-        <label for="archivo">Subir archivo .txt (opcional)</label>
-        <input id="archivo" name="archivo" type="file" accept=".txt" />
-
-        <label for="contrato">O pegar contrato</label>
-        <textarea id="contrato" name="contrato" placeholder="Pega aqui el texto del contrato..."></textarea>
-
-        <button class="btn" id="submit-btn" type="submit">Analizar contrato</button>
-        <div class="error" id="error-box"></div>
-      </form>
-    </div>
-
-    <div class="card">
-      <h2>Resultado</h2>
-      <div id="empty">Todavia no hay analisis.</div>
-      <div id="resultado" style="display:none;">
-        <div class="result-grid">
-          <div>
-            <h3>Resumen</h3>
-            <pre id="resumen"></pre>
+          <div class="field">
+            <label for="archivo">Subir .txt</label>
+            <input id="archivo" name="archivo" type="file" accept=".txt">
           </div>
-          <div>
-            <h3>Accion recomendada</h3>
-            <pre id="accion"></pre>
+          <div class="field">
+            <label for="contrato">Version A (contrato)</label>
+            <textarea id="contrato" name="contrato" placeholder="Pega la version principal del contrato..."></textarea>
           </div>
-        </div>
-
-        <h3>Clausulas detectadas</h3>
-        <div id="clausulas"></div>
-
-        <h3>Riesgos detectados</h3>
-        <div id="riesgos"></div>
+          <div class="field">
+            <label for="contrato_b">Version B (opcional para comparacion)</label>
+            <textarea id="contrato_b" name="contrato_b" placeholder="Pega una segunda version para comparar..."></textarea>
+          </div>
+          <div class="actions">
+            <button class="btn-primary" id="submit-btn" type="submit">Analizar</button>
+            <button class="btn-secondary" id="save-case-btn" type="button">Guardar caso</button>
+            <button class="btn-ghost" id="load-cases-btn" type="button">Listar casos</button>
+          </div>
+          <div class="actions">
+            <button class="btn-ghost" id="export-json-btn" type="button">Exportar JSON</button>
+            <button class="btn-ghost" id="export-pdf-btn" type="button">Exportar PDF</button>
+          </div>
+          <div class="error" id="error-box"></div>
+        </form>
+        <p class="muted" id="run-meta">Sin ejecuciones todavia.</p>
       </div>
-    </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">Panel 2 · Riesgos y trazabilidad</div>
+      <div class="panel-body">
+        <h4>Resumen</h4>
+        <pre id="resumen">Sin resumen.</pre>
+        <h4>Accion recomendada</h4>
+        <pre id="accion">Sin accion recomendada.</pre>
+        <h4>Clausulas detectadas</h4>
+        <div id="clausulas" class="muted">Sin clausulas.</div>
+        <h4>Riesgos detectados</h4>
+        <div id="riesgos" class="muted">Sin riesgos.</div>
+        <h4>Comparacion A/B</h4>
+        <pre id="comparacion">Sin comparacion.</pre>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">Panel 3 · Redlines y decisiones</div>
+      <div class="panel-body">
+        <h4>Redlines sugeridos</h4>
+        <div id="redlines" class="muted">Sin redlines.</div>
+        <h4>Quality QA</h4>
+        <pre id="quality">Sin calidad.</pre>
+        <h4>Casos guardados</h4>
+        <div id="cases-list" class="muted">No cargado.</div>
+      </div>
+    </section>
   </div>
 
   <script>
     const form = document.getElementById("analysis-form");
-    const btn = document.getElementById("submit-btn");
     const errorBox = document.getElementById("error-box");
-    const emptyState = document.getElementById("empty");
-    const resultBox = document.getElementById("resultado");
+    const runMeta = document.getElementById("run-meta");
     const resumen = document.getElementById("resumen");
     const accion = document.getElementById("accion");
     const clausulas = document.getElementById("clausulas");
     const riesgos = document.getElementById("riesgos");
+    const redlines = document.getElementById("redlines");
+    const quality = document.getElementById("quality");
+    const comparacion = document.getElementById("comparacion");
+    const casesList = document.getElementById("cases-list");
+    let latestResult = null;
+    let latestContract = "";
 
     function showError(message) {
       errorBox.textContent = message;
       errorBox.style.display = "block";
     }
-
     function clearError() {
       errorBox.textContent = "";
       errorBox.style.display = "none";
     }
+    function riskClass(level) {
+      const lower = (level || "").toLowerCase();
+      if (lower === "alto" || lower === "high") return "risk high";
+      if (lower === "bajo" || lower === "low") return "risk low";
+      return "risk";
+    }
+    function decisionKey(riskId) {
+      return "risk_decision_" + riskId;
+    }
 
-    function normalizeRiesgos(data) {
-      if (!data) return [];
-      if (Array.isArray(data)) return data;
-      return [{ riesgo: String(data), nivel: "medio", recomendacion: "" }];
+    function renderRiesgos(data, evidencias = {}) {
+      riesgos.innerHTML = "";
+      if (!Array.isArray(data) || data.length === 0) {
+        riesgos.textContent = "Sin riesgos.";
+        return;
+      }
+      data.forEach((item, idx) => {
+        const riskId = "risk_" + idx;
+        const wrap = document.createElement("div");
+        wrap.className = riskClass(item.nivel);
+        const confidence = Math.round((item.confianza || 0) * 100);
+        const clause = item.clausula_relacionada || "general";
+        const evidence = evidencias[clause] || "Sin evidencia textual.";
+        const savedDecision = localStorage.getItem(decisionKey(riskId)) || "";
+        wrap.innerHTML = `
+          <div class="risk-head">
+            <strong>[${(item.nivel || "medio").toUpperCase()}] ${item.riesgo || "Riesgo"}</strong>
+            <span class="confidence">Confianza: ${confidence}%</span>
+          </div>
+          <div>Recomendacion: ${item.recomendacion || "-"}</div>
+          <div class="evidence">Evidencia (${clause}): ${evidence}</div>
+        `;
+        const decision = document.createElement("div");
+        decision.className = "decision";
+        ["aceptar", "editar", "rechazar"].forEach((action) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.textContent = action;
+          if (savedDecision === action) btn.classList.add("selected");
+          btn.addEventListener("click", () => {
+            localStorage.setItem(decisionKey(riskId), action);
+            renderRiesgos(data, evidencias);
+          });
+          decision.appendChild(btn);
+        });
+        wrap.appendChild(decision);
+        riesgos.appendChild(wrap);
+      });
+    }
+
+    function renderClausulas(data) {
+      clausulas.innerHTML = "";
+      if (!Array.isArray(data) || data.length === 0) {
+        clausulas.textContent = "Sin clausulas.";
+        return;
+      }
+      data.forEach((c) => {
+        const span = document.createElement("span");
+        span.className = "tag";
+        span.textContent = c;
+        clausulas.appendChild(span);
+      });
+    }
+
+    function renderRedlines(data) {
+      redlines.innerHTML = "";
+      if (!Array.isArray(data) || data.length === 0) {
+        redlines.textContent = "Sin redlines.";
+        return;
+      }
+      data.forEach((item) => {
+        const card = document.createElement("div");
+        card.className = "redline";
+        card.innerHTML = `
+          <strong>${item.clausula || "general"}</strong>
+          <div>${item.texto_sugerido || "-"}</div>
+          <div class="muted">Motivo: ${item.motivo || "-"}</div>
+        `;
+        redlines.appendChild(card);
+      });
+    }
+
+    function renderResult(result, compareData = null) {
+      latestResult = result;
+      resumen.textContent = result.resumen_final || "Sin resumen.";
+      accion.textContent = result.accion_recomendada || "Sin accion.";
+      renderClausulas(result.clausulas_detectadas || []);
+      renderRiesgos(result.riesgos_detectados || [], result.clausula_evidencias || {});
+      renderRedlines(result.redlines_sugeridos || []);
+      quality.textContent = JSON.stringify({
+        quality_score: result.quality_score || 0,
+        quality_warnings: result.quality_warnings || [],
+        metrics: result.metrics || {},
+      }, null, 2);
+      comparacion.textContent = compareData ? JSON.stringify(compareData, null, 2) : "Sin comparacion.";
+      runMeta.textContent = `Run: ${result.run_id || "-"} · Calidad: ${result.quality_score || 0}`;
     }
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       clearError();
-      btn.disabled = true;
-      btn.textContent = "Analizando...";
+      const submitBtn = document.getElementById("submit-btn");
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Analizando...";
 
       const formData = new FormData(form);
+      latestContract = formData.get("contrato") || "";
+      if (formData.get("contrato_b")) formData.set("compare", "true");
+
       try {
         const response = await fetch("/api/analizar", { method: "POST", body: formData });
         const data = await response.json();
-        if (!response.ok || !data.ok) {
-          throw new Error(data.error || "Error al analizar");
-        }
-
-        const r = data.resultado;
-        resumen.textContent = r.resumen_final || "Sin resumen.";
-        accion.textContent = r.accion_recomendada || "Sin accion recomendada.";
-
-        clausulas.innerHTML = "";
-        (r.clausulas_detectadas || []).forEach((c) => {
-          const span = document.createElement("span");
-          span.className = "pill";
-          span.textContent = c;
-          clausulas.appendChild(span);
-        });
-
-        riesgos.innerHTML = "";
-        normalizeRiesgos(r.riesgos_detectados).forEach((item) => {
-          const div = document.createElement("div");
-          div.className = "risk";
-          const nivel = (item.nivel || "medio").toUpperCase();
-          const rec = item.recomendacion ? `\nRecomendacion: ${item.recomendacion}` : "";
-          div.textContent = `[${nivel}] ${item.riesgo || item}${rec}`;
-          riesgos.appendChild(div);
-        });
-
-        emptyState.style.display = "none";
-        resultBox.style.display = "block";
+        if (!response.ok || !data.ok) throw new Error(data.error || "Error al analizar.");
+        renderResult(data.resultado, data.comparacion || null);
       } catch (err) {
         showError(err.message);
       } finally {
-        btn.disabled = false;
-        btn.textContent = "Analizar contrato";
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Analizar";
       }
+    });
+
+    document.getElementById("save-case-btn").addEventListener("click", async () => {
+      clearError();
+      if (!latestResult) {
+        showError("Primero corre un analisis.");
+        return;
+      }
+      const titulo = prompt("Titulo del caso");
+      if (!titulo) return;
+      try {
+        const res = await fetch("/api/casos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            titulo,
+            cliente_id: document.getElementById("cliente_id").value || "default",
+            contrato: latestContract,
+            resultado: latestResult,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "No se pudo guardar.");
+        alert("Caso guardado: " + data.case_id);
+      } catch (err) {
+        showError(err.message);
+      }
+    });
+
+    document.getElementById("load-cases-btn").addEventListener("click", async () => {
+      clearError();
+      try {
+        const res = await fetch("/api/casos");
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || "No se pudieron cargar casos.");
+        if (!Array.isArray(data.casos) || data.casos.length === 0) {
+          casesList.textContent = "No hay casos guardados.";
+          return;
+        }
+        casesList.innerHTML = "";
+        data.casos.forEach((item) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "btn-ghost";
+          btn.style.margin = "0 6px 6px 0";
+          btn.textContent = `${item.titulo} (${item.case_id})`;
+          btn.addEventListener("click", async () => {
+            const caseRes = await fetch("/api/casos/" + item.case_id);
+            const caseData = await caseRes.json();
+            if (caseData.ok) renderResult(caseData.caso.resultado);
+          });
+          casesList.appendChild(btn);
+        });
+      } catch (err) {
+        showError(err.message);
+      }
+    });
+
+    document.getElementById("export-json-btn").addEventListener("click", () => {
+      if (!latestResult) {
+        showError("No hay resultado para exportar.");
+        return;
+      }
+      const blob = new Blob([JSON.stringify(latestResult, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "legalflow_resultado.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    document.getElementById("export-pdf-btn").addEventListener("click", () => {
+      window.print();
     });
   </script>
 </body>
