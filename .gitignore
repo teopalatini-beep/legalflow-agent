@@ -9,3 +9,5 @@ data/metrics.jsonl
 data/memory/
 data/runs/
 data/cases/
+data/integrations/
+data/matters/
