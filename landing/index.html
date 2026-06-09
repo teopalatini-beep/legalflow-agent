@@ -30,6 +30,46 @@
 
         .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
 
+        /* ─── Topbar ─── */
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(6px);
+            border-bottom: 1px solid var(--border);
+        }
+        .topbar-inner {
+            height: 68px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .brand {
+            font-weight: 800;
+            font-size: 20px;
+            color: var(--primary);
+        }
+        .brand span { color: var(--accent); }
+        .topbar-nav {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+        }
+        .topbar-nav a {
+            font-size: 14px;
+            color: var(--text-light);
+            text-decoration: none;
+        }
+        .topbar-nav a:hover { color: var(--accent); }
+        .topbar-cta {
+            padding: 10px 16px;
+            border-radius: 8px;
+            background: var(--accent);
+            color: white !important;
+            font-weight: 600;
+        }
+
         /* ─── Hero ─── */
         .hero {
             padding: 80px 0 60px;
@@ -72,6 +112,19 @@
             transition: transform 0.2s;
         }
         .hero-cta:hover { transform: translateY(-2px); }
+        .hero-cta-alt {
+            display: inline-block;
+            background: rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.25);
+            color: white;
+            padding: 16px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            margin-left: 12px;
+        }
+        .hero-cta-alt:hover { background: rgba(255,255,255,0.22); }
         .hero-stats {
             display: flex;
             justify-content: center;
@@ -83,6 +136,24 @@
         .stat { text-align: center; }
         .stat-number { font-size: 32px; font-weight: 700; color: var(--accent-light); }
         .stat-label { font-size: 13px; color: #94a3b8; margin-top: 4px; }
+
+        /* ─── Trust strip ─── */
+        .trust {
+            background: #eef2ff;
+            border-top: 1px solid #dbe4ff;
+            border-bottom: 1px solid #dbe4ff;
+        }
+        .trust-inner {
+            min-height: 58px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 26px;
+            flex-wrap: wrap;
+            font-size: 13px;
+            color: #334155;
+            font-weight: 600;
+        }
 
         /* ─── Problem ─── */
         .problem {
@@ -287,6 +358,25 @@
             text-align: center;
         }
 
+        /* ─── FAQ ─── */
+        .faq {
+            padding: 80px 0;
+        }
+        .faq h2 { font-size: 32px; text-align: center; margin-bottom: 40px; }
+        .faq-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .faq-item {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 22px;
+        }
+        .faq-item h3 { font-size: 18px; margin-bottom: 8px; }
+        .faq-item p { font-size: 14px; color: var(--text-light); }
+
         /* ─── CTA ─── */
         .cta {
             padding: 80px 0;
@@ -335,18 +425,33 @@
 
         /* ─── Responsive ─── */
         @media (max-width: 768px) {
+            .topbar-nav a:not(.topbar-cta) { display: none; }
             .hero h1 { font-size: 32px; }
             .hero-stats { flex-direction: column; gap: 24px; }
+            .hero-cta-alt { margin-left: 0; margin-top: 10px; }
             .problem-grid { grid-template-columns: 1fr; }
             .capas-grid { grid-template-columns: 1fr; }
             .pc-grid { grid-template-columns: 1fr; }
             .ba-grid { grid-template-columns: 1fr; }
+            .faq-grid { grid-template-columns: 1fr; }
             .flow { flex-direction: column; }
             .flow-arrow { transform: rotate(90deg); }
         }
     </style>
 </head>
 <body>
+
+<header class="topbar">
+    <div class="container topbar-inner">
+        <div class="brand">Legal<span>Flow</span></div>
+        <nav class="topbar-nav">
+            <a href="#como-funciona">Como funciona</a>
+            <a href="#antes-despues">Antes vs despues</a>
+            <a href="#faq">FAQ</a>
+            <a href="#contacto" class="topbar-cta">Solicitar demo</a>
+        </nav>
+    </div>
+</header>
 
 <!-- Hero -->
 <section class="hero">
@@ -355,6 +460,7 @@
         <h1>Tus contratos resueltos<br>en <span>minutos, no horas</span></h1>
         <p>Analizamos, comparamos y mejoramos tus contratos corporativos con IA. Vos solo revisas y decidis.</p>
         <a href="#contacto" class="hero-cta">Probar gratis con un contrato</a>
+        <a href="https://legalflow-agent.vercel.app" class="hero-cta-alt" target="_blank" rel="noopener noreferrer">Ver portal en vivo</a>
         <div class="hero-stats">
             <div class="stat">
                 <div class="stat-number">10 min</div>
@@ -369,6 +475,15 @@
                 <div class="stat-label">primer contrato sin costo</div>
             </div>
         </div>
+    </div>
+</section>
+
+<section class="trust">
+    <div class="container trust-inner">
+        <span>✅ Estandariza revisiones</span>
+        <span>🔍 Detecta riesgos frecuentes</span>
+        <span>⚖️ Mantiene decision final humana</span>
+        <span>🚀 Reduce tiempos de respuesta legal</span>
     </div>
 </section>
 
@@ -398,7 +513,7 @@
 </section>
 
 <!-- How it works -->
-<section class="how">
+<section class="how" id="como-funciona">
     <div class="container">
         <h2>Cómo funciona</h2>
         <div class="flow">
@@ -569,7 +684,7 @@
 </section>
 
 <!-- Before/After -->
-<section class="before-after">
+<section class="before-after" id="antes-despues">
     <div class="container">
         <h2>Antes vs Después para el abogado</h2>
         <div class="ba-grid">
@@ -588,6 +703,30 @@
         </div>
         <div class="focus-note">
             LegalFlow no busca reemplazar abogados. Busca liberar su tiempo para lo que realmente agrega valor: estrategia, criterio y negociación.
+        </div>
+    </div>
+</section>
+
+<section class="faq" id="faq">
+    <div class="container">
+        <h2>Preguntas frecuentes</h2>
+        <div class="faq-grid">
+            <div class="faq-item">
+                <h3>Esto reemplaza al abogado?</h3>
+                <p>No. LegalFlow automatiza trabajo operativo y acelera analisis, pero la validacion legal y la estrategia final siguen en manos del abogado.</p>
+            </div>
+            <div class="faq-item">
+                <h3>Que pasa con contratos complejos?</h3>
+                <p>Se analizan igual, pero recomendamos doble revision humana en contratos atipicos o de alto impacto financiero/regulatorio.</p>
+            </div>
+            <div class="faq-item">
+                <h3>Que gana el equipo legal con esto?</h3>
+                <p>Menos tiempo en tareas repetitivas y mas tiempo para negociacion, criterio juridico, prevencion de riesgo y acompanamiento al negocio.</p>
+            </div>
+            <div class="faq-item">
+                <h3>Se puede adaptar a nuestro playbook?</h3>
+                <p>Si. El mayor valor aparece cuando las reglas de revision se calibran con tus clausulas preferidas, niveles de riesgo y politica interna.</p>
+            </div>
         </div>
     </div>
 </section>
