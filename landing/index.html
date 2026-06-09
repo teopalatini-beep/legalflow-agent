@@ -213,6 +213,80 @@
         }
         .vs-table tr:nth-child(even) { background: var(--bg); }
 
+        /* ─── Pros & Contras ─── */
+        .pros-cons {
+            padding: 80px 0;
+        }
+        .pros-cons h2 { font-size: 32px; text-align: center; margin-bottom: 12px; }
+        .pros-cons .subtitle { text-align: center; color: var(--text-light); margin-bottom: 40px; font-size: 16px; }
+        .pc-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        .pc-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 28px;
+        }
+        .pc-card h3 { margin-bottom: 14px; font-size: 20px; }
+        .pc-card ul { list-style: none; }
+        .pc-card li {
+            font-size: 14px;
+            color: var(--text-light);
+            margin-bottom: 10px;
+            padding-left: 20px;
+            position: relative;
+        }
+        .pc-pros li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: var(--green);
+            font-weight: 700;
+        }
+        .pc-cons li::before {
+            content: "!";
+            position: absolute;
+            left: 0;
+            color: var(--yellow);
+            font-weight: 700;
+        }
+
+        /* ─── Before/After ─── */
+        .before-after {
+            padding: 80px 0;
+            background: white;
+        }
+        .before-after h2 { font-size: 32px; text-align: center; margin-bottom: 40px; }
+        .ba-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        .ba-card {
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 28px;
+            background: var(--card);
+        }
+        .ba-card h3 { margin-bottom: 14px; font-size: 20px; }
+        .ba-card p { font-size: 14px; color: var(--text-light); margin-bottom: 10px; }
+        .ba-before h3 { color: var(--red); }
+        .ba-after h3 { color: var(--green); }
+
+        .focus-note {
+            margin-top: 28px;
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #dbeafe;
+            background: #eff6ff;
+            color: #1e3a8a;
+            font-size: 15px;
+            text-align: center;
+        }
+
         /* ─── CTA ─── */
         .cta {
             padding: 80px 0;
@@ -265,6 +339,8 @@
             .hero-stats { flex-direction: column; gap: 24px; }
             .problem-grid { grid-template-columns: 1fr; }
             .capas-grid { grid-template-columns: 1fr; }
+            .pc-grid { grid-template-columns: 1fr; }
+            .ba-grid { grid-template-columns: 1fr; }
             .flow { flex-direction: column; }
             .flow-arrow { transform: rotate(90deg); }
         }
@@ -459,6 +535,60 @@
                 </tr>
             </tbody>
         </table>
+    </div>
+</section>
+
+<!-- Pros & Contras -->
+<section class="pros-cons">
+    <div class="container">
+        <h2>Pros y Contras de LegalFlow</h2>
+        <p class="subtitle">Transparencia total: lo que mejora y lo que igual requiere criterio profesional.</p>
+        <div class="pc-grid">
+            <div class="pc-card pc-pros">
+                <h3>✅ Pros</h3>
+                <ul>
+                    <li>Reduce horas operativas de revisión y comparación.</li>
+                    <li>Estandariza el análisis para que no dependa de quién revise.</li>
+                    <li>Detecta riesgos frecuentes en segundos y propone redacción.</li>
+                    <li>Da trazabilidad: qué cambió, qué falta y qué negociar.</li>
+                    <li>Permite responder más rápido al negocio sin bajar calidad.</li>
+                </ul>
+            </div>
+            <div class="pc-card pc-cons">
+                <h3>⚠️ Contras (reales)</h3>
+                <ul>
+                    <li>No reemplaza validación legal final ni firma profesional.</li>
+                    <li>En contratos muy atípicos, necesita revisión manual más profunda.</li>
+                    <li>Si el input está incompleto, el resultado también se degrada.</li>
+                    <li>Requiere política de uso para datos sensibles y compliance.</li>
+                    <li>Debe calibrarse al playbook de cada empresa para máximo valor.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Before/After -->
+<section class="before-after">
+    <div class="container">
+        <h2>Antes vs Después para el abogado</h2>
+        <div class="ba-grid">
+            <div class="ba-card ba-before">
+                <h3>Antes (proceso manual)</h3>
+                <p>Gran parte del día se va en revisión repetitiva, control de versiones y redacción desde cero.</p>
+                <p>El foco se dispersa entre tareas operativas y urgencias del negocio.</p>
+                <p>Las decisiones estratégicas llegan tarde porque primero hay que “limpiar” el contrato.</p>
+            </div>
+            <div class="ba-card ba-after">
+                <h3>Después (con LegalFlow)</h3>
+                <p>La IA resuelve el trabajo mecánico y el abogado entra directamente en decisión y negociación.</p>
+                <p>Más tiempo para proteger riesgo real, diseñar estrategia y alinear al negocio.</p>
+                <p>El equipo legal pasa de “revisor de texto” a socio estratégico de la compañía.</p>
+            </div>
+        </div>
+        <div class="focus-note">
+            LegalFlow no busca reemplazar abogados. Busca liberar su tiempo para lo que realmente agrega valor: estrategia, criterio y negociación.
+        </div>
     </div>
 </section>
 
