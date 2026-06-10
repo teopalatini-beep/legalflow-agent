@@ -38,11 +38,16 @@ flowchart LR
   - `POST /api/casos`
   - `GET /api/casos`
   - `GET /api/casos/<id>`
-- API futura:
+- API matter lifecycle (fase 2+):
   - `POST /api/matters`
   - `POST /api/matters/<id>/approve`
   - `POST /api/matters/<id>/sign`
   - `GET /api/matters/<id>/obligations`
+  - `POST /api/matters/<id>/approvals/request`
+  - `POST /api/matters/<id>/approvals/<approval_id>/decision`
+  - `POST /api/matters/<id>/documents/versions`
+  - `GET /api/matters/<id>/documents/versions`
+  - `GET /api/matters/<id>/timeline`
 
 ## 3-phase roadmap
 - Phase 1 (0-6 semanas)

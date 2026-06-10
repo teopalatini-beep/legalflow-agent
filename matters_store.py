@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
+from uuid import uuid4
 
 BASE_PATH = Path(__file__).parent
 MATTERS_DIR = BASE_PATH / "data" / "matters"
@@ -24,6 +25,8 @@ def create_matter(matter_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         "status": "draft",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "events": [],
+        "document_versions": [],
+        "approvals": [],
         **payload,
     }
     save_matter(matter_id, data)
@@ -67,3 +70,91 @@ def update_status(matter_id: str, status: str) -> Dict[str, Any]:
     matter["updated_at"] = datetime.now(timezone.utc).isoformat()
     save_matter(matter_id, matter)
     return matter
+
+
+def add_document_version(
+    matter_id: str,
+    *,
+    filename: str,
+    doc_hash: str,
+    created_by: str,
+    source: str = "manual",
+    metadata: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    matter = get_matter(matter_id)
+    if not matter:
+        raise FileNotFoundError(f"Matter '{matter_id}' no existe.")
+    versions = matter.setdefault("document_versions", [])
+    version_number = len(versions) + 1
+    version = {
+        "version_id": f"ver_{uuid4().hex[:12]}",
+        "number": version_number,
+        "filename": filename,
+        "doc_hash": doc_hash,
+        "source": source,
+        "metadata": metadata or {},
+        "created_by": created_by,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    versions.append(version)
+    matter["updated_at"] = datetime.now(timezone.utc).isoformat()
+    save_matter(matter_id, matter)
+    return version
+
+
+def request_approvals(
+    matter_id: str, *, reviewers: list[str], requested_by: str, note: str = ""
+) -> Dict[str, Any]:
+    matter = get_matter(matter_id)
+    if not matter:
+        raise FileNotFoundError(f"Matter '{matter_id}' no existe.")
+    approvals = matter.setdefault("approvals", [])
+    created = []
+    for reviewer in reviewers:
+        item = {
+            "approval_id": f"apr_{uuid4().hex[:12]}",
+            "reviewer": reviewer,
+            "status": "pending",
+            "requested_by": requested_by,
+            "note": note,
+            "requested_at": datetime.now(timezone.utc).isoformat(),
+        }
+        approvals.append(item)
+        created.append(item)
+    matter["status"] = "pending_approval"
+    matter["updated_at"] = datetime.now(timezone.utc).isoformat()
+    save_matter(matter_id, matter)
+    return {"created": created, "total": len(created)}
+
+
+def decision_approval(
+    matter_id: str, approval_id: str, *, decision: str, decided_by: str, note: str = ""
+) -> Dict[str, Any]:
+    if decision not in {"approved", "rejected"}:
+        raise ValueError("Decision invalida.")
+    matter = get_matter(matter_id)
+    if not matter:
+        raise FileNotFoundError(f"Matter '{matter_id}' no existe.")
+    approvals = matter.setdefault("approvals", [])
+    target = None
+    for item in approvals:
+        if item.get("approval_id") == approval_id:
+            target = item
+            break
+    if not target:
+        raise KeyError(f"Approval '{approval_id}' no existe.")
+    target["status"] = decision
+    target["decided_by"] = decided_by
+    target["decision_note"] = note
+    target["decided_at"] = datetime.now(timezone.utc).isoformat()
+
+    if any(x.get("status") == "rejected" for x in approvals):
+        matter["status"] = "changes_requested"
+    elif approvals and all(x.get("status") == "approved" for x in approvals):
+        matter["status"] = "approved"
+    else:
+        matter["status"] = "pending_approval"
+
+    matter["updated_at"] = datetime.now(timezone.utc).isoformat()
+    save_matter(matter_id, matter)
+    return target

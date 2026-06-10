@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import hashlib
 from datetime import datetime, timezone
 from typing import Any, Dict
 from uuid import uuid4
@@ -11,7 +12,15 @@ from flask import Flask, jsonify, render_template, request
 
 from agente import ErrorWorkflow, ejecutar_workflow
 from enterprise_integrations import CRMConnector, DMSConnector, ESignatureConnector
-from matters_store import append_event, create_matter, get_matter, update_status
+from matters_store import (
+    add_document_version,
+    append_event,
+    create_matter,
+    decision_approval,
+    get_matter,
+    request_approvals,
+    update_status,
+)
 from observability import CASES_DIR, audit_log, ensure_data_dirs, metric_log, redact_sensitive, retention_cleanup
 from sso_auth import require_sso, sso_context
 
@@ -266,6 +275,66 @@ def aprobar_matter(matter_id: str) -> Any:
     return jsonify({"ok": True, "matter": updated})
 
 
+@app.post("/api/matters/<matter_id>/approvals/request")
+@require_sso(required_groups=["legal_admin", "legal_ops"])
+def solicitar_aprobaciones(matter_id: str) -> Any:
+    if not validar_matter_id(matter_id):
+        return error_response("matter_id invalido.", 400, "invalid_matter_id")
+    payload = json_payload()
+    reviewers = payload.get("reviewers", [])
+    if not isinstance(reviewers, list) or not reviewers:
+        return error_response(
+            "reviewers debe ser una lista no vacia.", 400, "invalid_reviewers"
+        )
+    if not get_matter(matter_id):
+        return error_response("Matter no encontrado.", 404, "matter_not_found")
+    created = request_approvals(
+        matter_id,
+        reviewers=[str(x).strip() for x in reviewers if str(x).strip()],
+        requested_by=sso_context(request)["email"],
+        note=payload.get("note", ""),
+    )
+    append_event(
+        matter_id,
+        "approvals_requested",
+        {"by": sso_context(request)["email"], "reviewers": reviewers},
+    )
+    return jsonify({"ok": True, "approvals": created})
+
+
+@app.post("/api/matters/<matter_id>/approvals/<approval_id>/decision")
+@require_sso(required_groups=["legal_admin", "approver"])
+def decidir_aprobacion(matter_id: str, approval_id: str) -> Any:
+    if not validar_matter_id(matter_id):
+        return error_response("matter_id invalido.", 400, "invalid_matter_id")
+    payload = json_payload()
+    decision = str(payload.get("decision", "")).strip().lower()
+    if decision not in {"approved", "rejected"}:
+        return error_response(
+            "decision debe ser approved o rejected.", 400, "invalid_decision"
+        )
+    if not get_matter(matter_id):
+        return error_response("Matter no encontrado.", 404, "matter_not_found")
+    try:
+        updated = decision_approval(
+            matter_id,
+            approval_id,
+            decision=decision,
+            decided_by=sso_context(request)["email"],
+            note=payload.get("note", ""),
+        )
+    except KeyError:
+        return error_response("Approval no encontrado.", 404, "approval_not_found")
+    except ValueError as err:
+        return error_response(str(err), 400, "invalid_decision")
+    append_event(
+        matter_id,
+        "approval_decision",
+        {"by": sso_context(request)["email"], "approval_id": approval_id, "decision": decision},
+    )
+    return jsonify({"ok": True, "approval": updated})
+
+
 @app.post("/api/matters/<matter_id>/sign")
 @require_sso(required_groups=["legal_admin", "legal_ops"])
 def firmar_matter(matter_id: str) -> Any:
@@ -290,6 +359,48 @@ def firmar_matter(matter_id: str) -> Any:
     return jsonify({"ok": True, "matter": updated, "esign": esign_result})
 
 
+@app.post("/api/matters/<matter_id>/documents/versions")
+@require_sso(required_groups=["legal_admin", "legal_ops"])
+def registrar_version_documento(matter_id: str) -> Any:
+    if not validar_matter_id(matter_id):
+        return error_response("matter_id invalido.", 400, "invalid_matter_id")
+    payload = json_payload()
+    filename = str(payload.get("filename", "")).strip()
+    content = str(payload.get("content", "")).strip()
+    if not filename or not content:
+        return error_response("Faltan filename o content.", 400, "missing_fields")
+    if not get_matter(matter_id):
+        return error_response("Matter no encontrado.", 404, "matter_not_found")
+    doc_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    version = add_document_version(
+        matter_id,
+        filename=filename,
+        doc_hash=doc_hash,
+        source=payload.get("source", "manual"),
+        metadata=payload.get("metadata", {}),
+        created_by=sso_context(request)["email"],
+    )
+    append_event(
+        matter_id,
+        "document_version_added",
+        {"by": sso_context(request)["email"], "version_id": version["version_id"]},
+    )
+    return jsonify({"ok": True, "version": version})
+
+
+@app.get("/api/matters/<matter_id>/documents/versions")
+@require_sso(required_groups=["legal_admin", "legal_ops", "legal_viewer"])
+def listar_versiones_documento(matter_id: str) -> Any:
+    if not validar_matter_id(matter_id):
+        return error_response("matter_id invalido.", 400, "invalid_matter_id")
+    matter = get_matter(matter_id)
+    if not matter:
+        return error_response("Matter no encontrado.", 404, "matter_not_found")
+    return jsonify(
+        {"ok": True, "matter_id": matter_id, "versions": matter.get("document_versions", [])}
+    )
+
+
 @app.get("/api/matters/<matter_id>/obligations")
 @require_sso(required_groups=["legal_admin", "legal_ops", "legal_viewer"])
 def obligaciones_matter(matter_id: str) -> Any:
@@ -300,6 +411,26 @@ def obligaciones_matter(matter_id: str) -> Any:
         return error_response("Matter no encontrado.", 404, "matter_not_found")
     obligations = matter.get("obligations", [])
     return jsonify({"ok": True, "matter_id": matter_id, "obligations": obligations})
+
+
+@app.get("/api/matters/<matter_id>/timeline")
+@require_sso(required_groups=["legal_admin", "legal_ops", "legal_viewer"])
+def matter_timeline(matter_id: str) -> Any:
+    if not validar_matter_id(matter_id):
+        return error_response("matter_id invalido.", 400, "invalid_matter_id")
+    matter = get_matter(matter_id)
+    if not matter:
+        return error_response("Matter no encontrado.", 404, "matter_not_found")
+    return jsonify(
+        {
+            "ok": True,
+            "matter_id": matter_id,
+            "status": matter.get("status"),
+            "events": matter.get("events", []),
+            "approvals": matter.get("approvals", []),
+            "document_versions": matter.get("document_versions", []),
+        }
+    )
 
 
 @app.post("/api/integrations/crm/sync")

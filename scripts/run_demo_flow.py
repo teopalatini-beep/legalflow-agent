@@ -73,6 +73,41 @@ def main() -> None:
         matter_id = m_data["matter"]["matter_id"]
         print("OK: matter creado", matter_id)
 
+        request_approval = c.post(
+            f"/api/matters/{matter_id}/approvals/request",
+            json={"reviewers": ["legal.lead@acme.com"], "note": "demo review"},
+            headers=headers,
+        )
+        r_data = request_approval.get_json()
+        if not r_data.get("ok"):
+            raise RuntimeError(f"Solicitud de aprobacion fallo: {r_data}")
+        approval_id = r_data["approvals"]["created"][0]["approval_id"]
+        print("OK: approval workflow iniciado", approval_id)
+
+        approval_decision = c.post(
+            f"/api/matters/{matter_id}/approvals/{approval_id}/decision",
+            json={"decision": "approved", "note": "approved in demo"},
+            headers=headers,
+        )
+        if not approval_decision.get_json().get("ok"):
+            raise RuntimeError(f"Decision de aprobacion fallo: {approval_decision.get_json()}")
+        print("OK: approval decision registrada")
+
+        version = c.post(
+            f"/api/matters/{matter_id}/documents/versions",
+            json={
+                "filename": "msa_v1.txt",
+                "content": demo["contract_a"],
+                "source": "demo_flow",
+                "metadata": {"label": "version_a"},
+            },
+            headers=headers,
+        )
+        v_data = version.get_json()
+        if not v_data.get("ok"):
+            raise RuntimeError(f"Versionado documental fallo: {v_data}")
+        print("OK: version documental creada", v_data["version"]["version_id"])
+
         approve = c.post(
             f"/api/matters/{matter_id}/approve",
             json={"notes": "approved in demo"},
@@ -92,6 +127,12 @@ def main() -> None:
             raise RuntimeError(f"E-sign request fallo: {e_data}")
         mode = e_data["integration"].get("mode", "simulation")
         print("OK: e-sign solicitado en modo", mode)
+
+        timeline = c.get(f"/api/matters/{matter_id}/timeline", headers=headers)
+        tl_data = timeline.get_json()
+        if not tl_data.get("ok"):
+            raise RuntimeError(f"Timeline fallo: {tl_data}")
+        print("OK: timeline consultada con", len(tl_data.get("events", [])), "eventos")
 
         print("\nDemo flow completo.")
 

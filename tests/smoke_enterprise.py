@@ -57,6 +57,43 @@ def run() -> None:
         )
         assert_true("role authorization", approve_forbidden.status_code == 403)
 
+        req_apr = c.post(
+            f"/api/matters/{matter_id}/approvals/request",
+            json={"reviewers": ["legal.lead@acme.com"], "note": "review required"},
+            headers=admin_headers,
+        )
+        req_apr_data = req_apr.get_json()
+        assert_true("approval request", req_apr.status_code == 200 and req_apr_data.get("ok"))
+        approval_id = req_apr_data["approvals"]["created"][0]["approval_id"]
+
+        decision = c.post(
+            f"/api/matters/{matter_id}/approvals/{approval_id}/decision",
+            json={"decision": "approved", "note": "ok"},
+            headers={**admin_headers, "X-SSO-Groups": "legal_admin,approver"},
+        )
+        assert_true("approval decision", decision.status_code == 200 and decision.get_json().get("ok"))
+
+        doc_version = c.post(
+            f"/api/matters/{matter_id}/documents/versions",
+            json={
+                "filename": "msa_v1.txt",
+                "content": "Version uno del contrato",
+                "source": "upload",
+                "metadata": {"tag": "v1"},
+            },
+            headers=admin_headers,
+        )
+        assert_true("document version add", doc_version.status_code == 200 and doc_version.get_json().get("ok"))
+
+        list_versions = c.get(
+            f"/api/matters/{matter_id}/documents/versions", headers=viewer_headers
+        )
+        lv_data = list_versions.get_json()
+        assert_true(
+            "document versions list",
+            list_versions.status_code == 200 and lv_data.get("ok") and len(lv_data.get("versions", [])) >= 1,
+        )
+
         approve = c.post(
             f"/api/matters/{matter_id}/approve",
             json={"notes": "approved"},
@@ -66,6 +103,10 @@ def run() -> None:
 
         obligations = c.get(f"/api/matters/{matter_id}/obligations", headers=viewer_headers)
         assert_true("matter obligations", obligations.status_code == 200 and obligations.get_json().get("ok"))
+
+        timeline = c.get(f"/api/matters/{matter_id}/timeline", headers=viewer_headers)
+        t_data = timeline.get_json()
+        assert_true("matter timeline", timeline.status_code == 200 and t_data.get("ok"))
 
         crm = c.post("/api/integrations/crm/sync", json={"matter_id": matter_id}, headers=admin_headers)
         assert_true("crm sync", crm.status_code == 200 and crm.get_json().get("ok"))
