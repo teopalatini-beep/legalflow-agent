@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+from urllib import error, request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
@@ -73,14 +75,84 @@ class ESignatureConnector:
 
     provider = "generic-esign"
 
+    def _real_provider_config(self) -> Dict[str, str]:
+        return {
+            "endpoint": os.getenv("LEGALFLOW_ESIGN_ENDPOINT", "").strip(),
+            "api_key": os.getenv("LEGALFLOW_ESIGN_API_KEY", "").strip(),
+        }
+
+    def _real_request(
+        self, endpoint: str, api_key: str, payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        body = json.dumps(payload, ensure_ascii=True).encode("utf-8")
+        req = request.Request(
+            endpoint,
+            data=body,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}",
+            },
+        )
+        with request.urlopen(req, timeout=10) as resp:
+            response_raw = resp.read().decode("utf-8")
+            try:
+                return json.loads(response_raw) if response_raw else {}
+            except json.JSONDecodeError:
+                return {"raw_response": response_raw}
+
     def request_signature(
         self, matter_id: str, signer_email: str, document_ref: str
     ) -> Dict[str, Any]:
+        cfg = self._real_provider_config()
+        if cfg["endpoint"] and cfg["api_key"]:
+            payload = {
+                "matter_id": matter_id,
+                "signer_email": signer_email,
+                "document_ref": document_ref,
+            }
+            try:
+                external = self._real_request(cfg["endpoint"], cfg["api_key"], payload)
+                envelope_id = external.get("envelope_id") or external.get("id") or f"env_real_{hashlib.md5(matter_id.encode()).hexdigest()[:12]}"
+                _append_event(
+                    "esign_requests",
+                    {
+                        "provider": "external-esign",
+                        "mode": "real",
+                        "matter_id": matter_id,
+                        "signer_email": signer_email,
+                        "document_ref": document_ref,
+                        "envelope_id": envelope_id,
+                        "external_response": external,
+                        "status": "signature_requested",
+                    },
+                )
+                return {
+                    "provider": "external-esign",
+                    "mode": "real",
+                    "envelope_id": envelope_id,
+                    "status": "signature_requested",
+                }
+            except (error.URLError, TimeoutError, ValueError) as err:
+                _append_event(
+                    "esign_requests",
+                    {
+                        "provider": "external-esign",
+                        "mode": "fallback_simulation",
+                        "matter_id": matter_id,
+                        "signer_email": signer_email,
+                        "document_ref": document_ref,
+                        "status": "provider_error_fallback",
+                        "error": str(err),
+                    },
+                )
+
         envelope_id = f"env_{hashlib.md5(f'{matter_id}:{signer_email}'.encode()).hexdigest()[:14]}"
         _append_event(
             "esign_requests",
             {
                 "provider": self.provider,
+                "mode": "simulation",
                 "matter_id": matter_id,
                 "signer_email": signer_email,
                 "document_ref": document_ref,
@@ -90,6 +162,7 @@ class ESignatureConnector:
         )
         return {
             "provider": self.provider,
+            "mode": "simulation",
             "envelope_id": envelope_id,
             "status": "signature_requested",
         }

@@ -99,6 +99,7 @@
           </div>
           <div class="actions">
             <button class="btn-primary" id="submit-btn" type="submit">Analizar</button>
+            <button class="btn-ghost" id="load-demo-btn" type="button">Cargar demo</button>
             <button class="btn-secondary" id="save-case-btn" type="button">Guardar caso</button>
             <button class="btn-ghost" id="load-cases-btn" type="button">Listar casos</button>
           </div>
@@ -155,6 +156,14 @@
     const casesList = document.getElementById("cases-list");
     let latestResult = null;
     let latestContract = "";
+    const DEMO_PAYLOAD = {
+      cliente_id: "default",
+      modo_analisis: "strict_playbook",
+      contrato_a:
+        "Contrato de servicios de software entre ACME y NOVA. Incluye confidencialidad por 2 anos, multa del 20% por incumplimiento y jurisdiccion en Montevideo.",
+      contrato_b:
+        "Contrato de servicios de software entre ACME y NOVA. Incluye confidencialidad por 5 anos, multa del 10% y jurisdiccion en CABA con mediacion previa.",
+    };
 
     function showError(message) {
       errorBox.textContent = message;
@@ -284,6 +293,17 @@
         submitBtn.disabled = false;
         submitBtn.textContent = "Analizar";
       }
+    });
+
+    document.getElementById("load-demo-btn").addEventListener("click", () => {
+      clearError();
+      document.getElementById("modo").value = "local";
+      document.getElementById("modelo").value = "composer-2.5";
+      document.getElementById("cliente_id").value = DEMO_PAYLOAD.cliente_id;
+      document.getElementById("modo_analisis").value = DEMO_PAYLOAD.modo_analisis;
+      document.getElementById("contrato").value = DEMO_PAYLOAD.contrato_a;
+      document.getElementById("contrato_b").value = DEMO_PAYLOAD.contrato_b;
+      runMeta.textContent = "Demo cargada: presiona Analizar para ejecutar el recorrido comercial.";
     });
 
     document.getElementById("save-case-btn").addEventListener("click", async () => {

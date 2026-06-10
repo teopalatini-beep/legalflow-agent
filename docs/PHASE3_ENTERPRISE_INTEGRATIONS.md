@@ -41,3 +41,15 @@ Los conectores actuales son `event-log connectors`:
 - validan el contrato API-first
 - generan referencias externas (`crm_ref`, `dms_ref`, `envelope_id`)
 - registran trazabilidad para luego reemplazar por integraciones reales (Salesforce/HubSpot, SharePoint/Drive, DocuSign/Dropbox Sign).
+
+## Modo real vs modo simulacion (bloqueos por key)
+
+- e-signature usa modo **real** solo si existen:
+  - `LEGALFLOW_ESIGN_ENDPOINT`
+  - `LEGALFLOW_ESIGN_API_KEY`
+- Si falta alguna de esas variables, la API responde en modo:
+  - `"mode": "simulation"`
+- Si proveedor real falla, se activa:
+  - `"mode": "fallback_simulation"`
+
+Esto permite continuar con el resto del flujo sin bloquear la operación.

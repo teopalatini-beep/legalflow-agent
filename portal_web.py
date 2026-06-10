@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict
 from uuid import uuid4
@@ -17,10 +19,23 @@ app = Flask(__name__)
 crm_connector = CRMConnector()
 dms_connector = DMSConnector()
 esign_connector = ESignatureConnector()
+MATTER_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-]{6,80}$")
 
 
 def limpiar_texto_subido(texto: str) -> str:
     return texto.strip()
+
+
+def error_response(message: str, status: int = 400, code: str = "bad_request") -> Any:
+    return jsonify({"ok": False, "error": message, "code": code}), status
+
+
+def json_payload() -> Dict[str, Any]:
+    return request.get_json(force=True, silent=True) or {}
+
+
+def validar_matter_id(matter_id: str) -> bool:
+    return bool(MATTER_ID_PATTERN.match(matter_id))
 
 
 @app.get("/")
@@ -48,6 +63,33 @@ def _compare_results(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+@app.get("/api/health")
+def health() -> Any:
+    ensure_data_dirs()
+    return jsonify(
+        {
+            "ok": True,
+            "service": "legalflow-agent",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+
+@app.get("/api/health/config")
+def health_config() -> Any:
+    return jsonify(
+        {
+            "ok": True,
+            "config": {
+                "cursor_api_key_set": bool(os.getenv("CURSOR_API_KEY")),
+                "sso_token_set": bool(os.getenv("LEGALFLOW_SSO_TOKEN")),
+                "esign_endpoint_set": bool(os.getenv("LEGALFLOW_ESIGN_ENDPOINT")),
+                "esign_api_key_set": bool(os.getenv("LEGALFLOW_ESIGN_API_KEY")),
+            },
+        }
+    )
+
+
 @app.post("/api/analizar")
 def analizar_contrato() -> Any:
     ensure_data_dirs()
@@ -70,23 +112,21 @@ def analizar_contrato() -> Any:
             try:
                 contrato_texto = contenido.decode("latin-1")
             except UnicodeDecodeError:
-                return (
-                    jsonify(
-                        {
-                            "ok": False,
-                            "error": "No pude leer el archivo. Usa .txt UTF-8 o pega el texto del contrato.",
-                        }
-                    ),
-                    400,
+                return error_response(
+                    "No pude leer el archivo. Usa .txt UTF-8 o pega el texto del contrato.",
+                    status=400,
+                    code="invalid_file_encoding",
                 )
 
     contrato_texto = limpiar_texto_subido(contrato_texto)
     contrato_b = limpiar_texto_subido(contrato_b)
     if not contrato_texto:
-        return jsonify({"ok": False, "error": "Debes pegar o subir un contrato."}), 400
+        return error_response(
+            "Debes pegar o subir un contrato.", status=400, code="missing_contract"
+        )
 
     if modo not in {"local", "sdk"}:
-        return jsonify({"ok": False, "error": "Modo invalido."}), 400
+        return error_response("Modo invalido.", status=400, code="invalid_mode")
 
     start = datetime.now(timezone.utc)
     try:
@@ -112,10 +152,12 @@ def analizar_contrato() -> Any:
             response["resultado_b"] = resultado_b
     except ErrorWorkflow as err:
         audit_log("analysis_error", {"cliente_id": cliente_id, "error": str(err)})
-        return jsonify({"ok": False, "error": str(err)}), 400
+        return error_response(str(err), status=400, code="workflow_error")
     except Exception as err:  # pragma: no cover
         audit_log("analysis_exception", {"cliente_id": cliente_id, "error": str(err)})
-        return jsonify({"ok": False, "error": f"Error inesperado: {err}"}), 500
+        return error_response(
+            f"Error inesperado: {err}", status=500, code="internal_exception"
+        )
 
     duration_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
     metric_log(
@@ -132,10 +174,10 @@ def analizar_contrato() -> Any:
 
 @app.post("/api/casos")
 def crear_caso() -> Any:
-    payload = request.get_json(force=True, silent=True) or {}
+    payload = json_payload()
     titulo = payload.get("titulo", "").strip()
     if not titulo:
-        return jsonify({"ok": False, "error": "El caso requiere un titulo."}), 400
+        return error_response("El caso requiere un titulo.", 400, "missing_title")
 
     contrato = redact_sensitive(payload.get("contrato", ""))
     resultado = payload.get("resultado", {})
@@ -172,7 +214,7 @@ def listar_casos() -> Any:
 def obtener_caso(case_id: str) -> Any:
     path = CASES_DIR / f"{case_id}.json"
     if not path.exists():
-        return jsonify({"ok": False, "error": "Caso no encontrado."}), 404
+        return error_response("Caso no encontrado.", 404, "case_not_found")
     data = json.loads(path.read_text(encoding="utf-8"))
     return jsonify({"ok": True, "caso": data})
 
@@ -180,8 +222,14 @@ def obtener_caso(case_id: str) -> Any:
 @app.post("/api/matters")
 @require_sso(required_groups=["legal_admin", "legal_ops"])
 def crear_matter() -> Any:
-    payload = request.get_json(force=True, silent=True) or {}
+    payload = json_payload()
     matter_id = payload.get("matter_id") or f"matter_{uuid4().hex[:12]}"
+    if not validar_matter_id(matter_id):
+        return error_response(
+            "matter_id invalido (usa 6-80 caracteres alfanumericos, _ o -).",
+            400,
+            "invalid_matter_id",
+        )
     base = {
         "cliente_id": payload.get("cliente_id", "default"),
         "case_id": payload.get("case_id"),
@@ -189,6 +237,10 @@ def crear_matter() -> Any:
         "analysis_result": payload.get("analysis_result", {}),
         "obligations": payload.get("obligations", []),
     }
+    if not isinstance(base["obligations"], list):
+        return error_response(
+            "obligations debe ser una lista.", 400, "invalid_obligations"
+        )
     matter = create_matter(matter_id, base)
     append_event(matter_id, "matter_created", {"by": sso_context(request)["email"]})
     audit_log("matter_created", {"matter_id": matter_id, "by": sso_context(request)["email"]})
@@ -198,14 +250,17 @@ def crear_matter() -> Any:
 @app.post("/api/matters/<matter_id>/approve")
 @require_sso(required_groups=["legal_admin", "approver"])
 def aprobar_matter(matter_id: str) -> Any:
+    if not validar_matter_id(matter_id):
+        return error_response("matter_id invalido.", 400, "invalid_matter_id")
     matter = get_matter(matter_id)
     if not matter:
-        return jsonify({"ok": False, "error": "Matter no encontrado."}), 404
+        return error_response("Matter no encontrado.", 404, "matter_not_found")
+    payload = json_payload()
     update_status(matter_id, "approved")
     updated = append_event(
         matter_id,
         "approved",
-        {"by": sso_context(request)["email"], "notes": (request.json or {}).get("notes", "")},
+        {"by": sso_context(request)["email"], "notes": payload.get("notes", "")},
     )
     audit_log("matter_approved", {"matter_id": matter_id, "by": sso_context(request)["email"]})
     return jsonify({"ok": True, "matter": updated})
@@ -214,13 +269,15 @@ def aprobar_matter(matter_id: str) -> Any:
 @app.post("/api/matters/<matter_id>/sign")
 @require_sso(required_groups=["legal_admin", "legal_ops"])
 def firmar_matter(matter_id: str) -> Any:
+    if not validar_matter_id(matter_id):
+        return error_response("matter_id invalido.", 400, "invalid_matter_id")
     matter = get_matter(matter_id)
     if not matter:
-        return jsonify({"ok": False, "error": "Matter no encontrado."}), 404
-    payload = request.get_json(force=True, silent=True) or {}
+        return error_response("Matter no encontrado.", 404, "matter_not_found")
+    payload = json_payload()
     signer_email = payload.get("signer_email")
     if not signer_email:
-        return jsonify({"ok": False, "error": "Falta signer_email."}), 400
+        return error_response("Falta signer_email.", 400, "missing_signer_email")
     document_ref = payload.get("document_ref", matter_id)
     esign_result = esign_connector.request_signature(matter_id, signer_email, document_ref)
     update_status(matter_id, "signature_pending")
@@ -236,9 +293,11 @@ def firmar_matter(matter_id: str) -> Any:
 @app.get("/api/matters/<matter_id>/obligations")
 @require_sso(required_groups=["legal_admin", "legal_ops", "legal_viewer"])
 def obligaciones_matter(matter_id: str) -> Any:
+    if not validar_matter_id(matter_id):
+        return error_response("matter_id invalido.", 400, "invalid_matter_id")
     matter = get_matter(matter_id)
     if not matter:
-        return jsonify({"ok": False, "error": "Matter no encontrado."}), 404
+        return error_response("Matter no encontrado.", 404, "matter_not_found")
     obligations = matter.get("obligations", [])
     return jsonify({"ok": True, "matter_id": matter_id, "obligations": obligations})
 
@@ -246,13 +305,15 @@ def obligaciones_matter(matter_id: str) -> Any:
 @app.post("/api/integrations/crm/sync")
 @require_sso(required_groups=["legal_admin", "legal_ops"])
 def sync_crm() -> Any:
-    payload = request.get_json(force=True, silent=True) or {}
+    payload = json_payload()
     matter_id = payload.get("matter_id")
     if not matter_id:
-        return jsonify({"ok": False, "error": "Falta matter_id."}), 400
+        return error_response("Falta matter_id.", 400, "missing_matter_id")
+    if not validar_matter_id(matter_id):
+        return error_response("matter_id invalido.", 400, "invalid_matter_id")
     matter = get_matter(matter_id)
     if not matter:
-        return jsonify({"ok": False, "error": "Matter no encontrado."}), 404
+        return error_response("Matter no encontrado.", 404, "matter_not_found")
     result = crm_connector.sync_matter(matter_id, payload.get("crm_payload", matter))
     append_event(matter_id, "crm_synced", {"by": sso_context(request)["email"], **result})
     return jsonify({"ok": True, "integration": result})
@@ -261,15 +322,17 @@ def sync_crm() -> Any:
 @app.post("/api/integrations/dms/upload")
 @require_sso(required_groups=["legal_admin", "legal_ops"])
 def upload_dms() -> Any:
-    payload = request.get_json(force=True, silent=True) or {}
+    payload = json_payload()
     matter_id = payload.get("matter_id")
     filename = payload.get("filename", "contract.txt")
     content = payload.get("content", "")
     if not matter_id or not content:
-        return jsonify({"ok": False, "error": "Faltan matter_id o content."}), 400
+        return error_response("Faltan matter_id o content.", 400, "missing_fields")
+    if not validar_matter_id(matter_id):
+        return error_response("matter_id invalido.", 400, "invalid_matter_id")
     matter = get_matter(matter_id)
     if not matter:
-        return jsonify({"ok": False, "error": "Matter no encontrado."}), 404
+        return error_response("Matter no encontrado.", 404, "matter_not_found")
     result = dms_connector.upload_document(
         matter_id,
         filename=filename,
@@ -283,15 +346,19 @@ def upload_dms() -> Any:
 @app.post("/api/integrations/esign/request")
 @require_sso(required_groups=["legal_admin", "legal_ops"])
 def request_esign() -> Any:
-    payload = request.get_json(force=True, silent=True) or {}
+    payload = json_payload()
     matter_id = payload.get("matter_id")
     signer_email = payload.get("signer_email")
     document_ref = payload.get("document_ref", matter_id)
     if not matter_id or not signer_email:
-        return jsonify({"ok": False, "error": "Faltan matter_id o signer_email."}), 400
+        return error_response(
+            "Faltan matter_id o signer_email.", 400, "missing_fields"
+        )
+    if not validar_matter_id(matter_id):
+        return error_response("matter_id invalido.", 400, "invalid_matter_id")
     matter = get_matter(matter_id)
     if not matter:
-        return jsonify({"ok": False, "error": "Matter no encontrado."}), 404
+        return error_response("Matter no encontrado.", 404, "matter_not_found")
     result = esign_connector.request_signature(matter_id, signer_email, document_ref)
     append_event(matter_id, "esign_requested", {"by": sso_context(request)["email"], **result})
     return jsonify({"ok": True, "integration": result})

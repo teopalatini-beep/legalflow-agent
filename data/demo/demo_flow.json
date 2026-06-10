@@ -1,0 +1,15 @@
+{
+  "cliente_id": "default",
+  "modo": "local",
+  "modelo": "composer-2.5",
+  "modo_analisis": "strict_playbook",
+  "contract_a": "Contrato de servicios de software entre ACME y NOVA. Incluye confidencialidad por 2 anos, multa del 20% por incumplimiento y jurisdiccion en Montevideo.",
+  "contract_b": "Contrato de servicios de software entre ACME y NOVA. Incluye confidencialidad por 5 anos, multa del 10% y jurisdiccion en CABA con mediacion previa.",
+  "matter_title": "Demo comercial MSA ACME",
+  "obligations": [
+    {
+      "title": "Entregar release v1",
+      "due_date": "2026-07-15"
+    }
+  ]
+}

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from functools import wraps
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Tuple
 
 from flask import Request, jsonify, request
 
@@ -28,6 +28,10 @@ def sso_context(req: Request) -> Dict[str, Any]:
     }
 
 
+def _error_response(code: str, message: str, status: int) -> Tuple[Any, int]:
+    return jsonify({"ok": False, "error": message, "code": code}), status
+
+
 def require_sso(required_groups: list[str] | None = None) -> Callable[..., Any]:
     required_groups = required_groups or []
 
@@ -37,13 +41,17 @@ def require_sso(required_groups: list[str] | None = None) -> Callable[..., Any]:
             expected_token = os.getenv("LEGALFLOW_SSO_TOKEN", "").strip()
             ctx = sso_context(request)
             if not ctx["user"] or not ctx["email"]:
-                return jsonify({"ok": False, "error": "SSO headers faltantes."}), 401
+                return _error_response(
+                    "sso_missing_headers", "SSO headers faltantes.", 401
+                )
             if expected_token and ctx["token"] != expected_token:
-                return jsonify({"ok": False, "error": "Token SSO invalido."}), 401
+                return _error_response("sso_invalid_token", "Token SSO invalido.", 401)
             if required_groups:
                 user_groups = set(ctx["groups"])
                 if not any(group.lower() in user_groups for group in required_groups):
-                    return jsonify({"ok": False, "error": "Sin permisos para este recurso."}), 403
+                    return _error_response(
+                        "sso_forbidden", "Sin permisos para este recurso.", 403
+                    )
             return func(*args, **kwargs)
 
         return wrapper
