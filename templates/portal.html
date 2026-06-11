@@ -47,6 +47,13 @@
     .decision button { padding: 6px 8px; font-size: 11px; border: 1px solid var(--line); background: #fff; color: #2f3c57; }
     .decision .selected { background: #e7edff; border-color: #90a0ff; color: #1f2ea2; }
     .redline { border: 1px solid var(--line); border-radius: 8px; padding: 10px; margin-bottom: 10px; font-size: 13px; }
+    .status-badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; margin: 6px 0; }
+    .status-signature_pending { background: #fff4de; color: #915f00; }
+    .status-signed { background: #dff6e9; color: #0a6e3d; }
+    .status-declined, .status-voided { background: #ffe6e8; color: #9c2f3a; }
+    .status-draft, .status-approved, .status-default { background: #e8edff; color: #2439b5; }
+    .timeline-item { border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin-bottom: 6px; font-size: 12px; background: #f8faff; }
+    .mini { font-size: 11px; color: var(--muted); margin-top: 4px; }
     pre { white-space: pre-wrap; margin: 0; font-size: 12px; background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 10px; }
     @media (max-width: 1100px) { .layout { grid-template-columns: 1fr; height: auto; } }
   </style>
@@ -136,6 +143,37 @@
         <div id="redlines" class="muted">Sin redlines.</div>
         <h4>Quality QA</h4>
         <pre id="quality">Sin calidad.</pre>
+        <h4>Firma embebida (demo)</h4>
+        <div class="row">
+          <div class="field">
+            <label for="signer-email">Signer email</label>
+            <input id="signer-email" value="legal@acme.com">
+          </div>
+          <div class="field">
+            <label for="matter-title">Matter title</label>
+            <input id="matter-title" value="Demo Matter Portal">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="sso-token">SSO token (si aplica)</label>
+            <input id="sso-token" placeholder="opcional si LEGALFLOW_SSO_TOKEN no esta seteado">
+          </div>
+          <div class="field">
+            <label for="sso-groups">SSO groups</label>
+            <input id="sso-groups" value="legal_admin,legal_ops,approver,legal_viewer">
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn-secondary" id="create-matter-btn" type="button">Crear matter demo</button>
+          <button class="btn-primary" id="start-signing-btn" type="button">Iniciar firma</button>
+          <button class="btn-ghost" id="open-signing-btn" type="button">Abrir firma</button>
+          <button class="btn-ghost" id="simulate-signed-btn" type="button">Simular firmado</button>
+          <button class="btn-ghost" id="refresh-signing-btn" type="button">Refrescar timeline</button>
+        </div>
+        <div id="signing-status" class="status-badge status-default">Estado firma: draft</div>
+        <pre id="signing-meta">Sin datos de firma.</pre>
+        <div id="signing-timeline" class="muted">Sin timeline de firma.</div>
         <h4>Casos guardados</h4>
         <div id="cases-list" class="muted">No cargado.</div>
       </div>
@@ -154,8 +192,18 @@
     const quality = document.getElementById("quality");
     const comparacion = document.getElementById("comparacion");
     const casesList = document.getElementById("cases-list");
+    const signingStatus = document.getElementById("signing-status");
+    const signingMeta = document.getElementById("signing-meta");
+    const signingTimeline = document.getElementById("signing-timeline");
     let latestResult = null;
     let latestContract = "";
+    const signingState = {
+      matterId: "",
+      envelopeId: "",
+      recipientId: "",
+      signingUrl: "",
+      status: "draft",
+    };
     const DEMO_PAYLOAD = {
       cliente_id: "default",
       modo_analisis: "strict_playbook",
@@ -181,6 +229,91 @@
     }
     function decisionKey(riskId) {
       return "risk_decision_" + riskId;
+    }
+    function statusBadgeClass(status) {
+      const safe = (status || "default").toLowerCase();
+      return `status-badge status-${safe}`;
+    }
+    function setSigningStatus(status) {
+      signingState.status = status || "draft";
+      signingStatus.className = statusBadgeClass(signingState.status);
+      signingStatus.textContent = `Estado firma: ${signingState.status}`;
+    }
+    function getSsoHeaders(customGroups = null) {
+      const token = document.getElementById("sso-token").value.trim();
+      const groups = customGroups || document.getElementById("sso-groups").value.trim() || "legal_admin,legal_ops";
+      const headers = {
+        "Content-Type": "application/json",
+        "X-SSO-User": "portal-demo-user",
+        "X-SSO-Email": "portal-demo@legalflow.test",
+        "X-SSO-Groups": groups,
+      };
+      if (token) headers.Authorization = `Bearer ${token}`;
+      return headers;
+    }
+    function updateSigningMeta(extra = {}) {
+      signingMeta.textContent = JSON.stringify({
+        matter_id: signingState.matterId || null,
+        envelope_id: signingState.envelopeId || null,
+        recipient_id: signingState.recipientId || null,
+        signing_url: signingState.signingUrl || null,
+        status: signingState.status,
+        ...extra,
+      }, null, 2);
+    }
+    async function ensureMatterForSigning() {
+      if (signingState.matterId) return signingState.matterId;
+      const response = await fetch("/api/matters", {
+        method: "POST",
+        headers: getSsoHeaders(),
+        body: JSON.stringify({
+          cliente_id: document.getElementById("cliente_id").value || "default",
+          title: document.getElementById("matter-title").value || "Demo Matter Portal",
+          analysis_result: latestResult || {},
+          obligations: [],
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "No se pudo crear el matter demo.");
+      }
+      signingState.matterId = data.matter.matter_id;
+      setSigningStatus(data.matter.status || "draft");
+      updateSigningMeta({ created: true });
+      runMeta.textContent = `Matter demo activo: ${signingState.matterId}`;
+      return signingState.matterId;
+    }
+    async function refreshSigningTimeline() {
+      if (!signingState.matterId) {
+        signingTimeline.textContent = "Primero crea un matter demo.";
+        return;
+      }
+      const response = await fetch(`/api/matters/${signingState.matterId}/timeline`, {
+        method: "GET",
+        headers: getSsoHeaders("legal_admin,legal_ops,legal_viewer"),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "No se pudo obtener timeline.");
+      }
+      setSigningStatus(data.status || signingState.status);
+      const timelineEvents = (data.events || []).filter((e) => String(e.type || "").startsWith("esign") || e.type === "signature_requested");
+      if (timelineEvents.length === 0) {
+        signingTimeline.textContent = "Timeline cargada sin eventos de firma.";
+      } else {
+        signingTimeline.innerHTML = "";
+        timelineEvents.slice().reverse().forEach((event) => {
+          const item = document.createElement("div");
+          item.className = "timeline-item";
+          item.innerHTML = `
+            <strong>${event.type || "event"}</strong>
+            <div class="mini">${event.timestamp || "-"}</div>
+            <div class="mini">${JSON.stringify(event.payload || {})}</div>
+          `;
+          signingTimeline.appendChild(item);
+        });
+      }
+      updateSigningMeta({ timeline_events: timelineEvents.length });
     }
 
     function renderRiesgos(data, evidencias = {}) {
@@ -378,6 +511,102 @@
 
     document.getElementById("export-pdf-btn").addEventListener("click", () => {
       window.print();
+    });
+
+    document.getElementById("create-matter-btn").addEventListener("click", async () => {
+      clearError();
+      try {
+        await ensureMatterForSigning();
+        await refreshSigningTimeline();
+      } catch (err) {
+        showError(err.message);
+      }
+    });
+
+    document.getElementById("start-signing-btn").addEventListener("click", async () => {
+      clearError();
+      try {
+        const matterId = await ensureMatterForSigning();
+        const response = await fetch("/api/integrations/esign/create-envelope", {
+          method: "POST",
+          headers: getSsoHeaders(),
+          body: JSON.stringify({
+            matter_id: matterId,
+            signer_email: document.getElementById("signer-email").value.trim() || "legal@acme.com",
+            document_ref: latestResult?.run_id || matterId,
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "No se pudo iniciar firma.");
+        signingState.envelopeId = data.integration.envelope_id || "";
+        signingState.recipientId = data.integration.recipient_id || "";
+        setSigningStatus(data.integration.status || "signature_pending");
+        updateSigningMeta({ mode: data.integration.mode || "simulation" });
+        await refreshSigningTimeline();
+      } catch (err) {
+        showError(err.message);
+      }
+    });
+
+    document.getElementById("open-signing-btn").addEventListener("click", async () => {
+      clearError();
+      try {
+        const matterId = await ensureMatterForSigning();
+        if (!signingState.envelopeId || !signingState.recipientId) {
+          throw new Error("Primero ejecuta 'Iniciar firma'.");
+        }
+        const response = await fetch("/api/integrations/esign/recipient-view", {
+          method: "POST",
+          headers: getSsoHeaders(),
+          body: JSON.stringify({ matter_id: matterId }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "No se pudo generar recipient-view.");
+        signingState.signingUrl = data.integration.signing_url || "";
+        updateSigningMeta({ recipient_view: true });
+        if (signingState.signingUrl) window.open(signingState.signingUrl, "_blank", "noopener,noreferrer");
+        await refreshSigningTimeline();
+      } catch (err) {
+        showError(err.message);
+      }
+    });
+
+    document.getElementById("simulate-signed-btn").addEventListener("click", async () => {
+      clearError();
+      try {
+        const matterId = await ensureMatterForSigning();
+        if (!signingState.envelopeId) {
+          throw new Error("Primero ejecuta 'Iniciar firma' para obtener envelope_id.");
+        }
+        const eventId = `evt_portal_${Date.now()}`;
+        const response = await fetch("/api/integrations/esign/webhook", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event_id: eventId,
+            matter_id: matterId,
+            envelope_id: signingState.envelopeId,
+            recipient_id: signingState.recipientId,
+            status: "completed",
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || "No se pudo simular webhook.");
+        setSigningStatus(data.status || "signed");
+        updateSigningMeta({ webhook_event_id: data.event_id || eventId });
+        await refreshSigningTimeline();
+      } catch (err) {
+        showError(err.message);
+      }
+    });
+
+    document.getElementById("refresh-signing-btn").addEventListener("click", async () => {
+      clearError();
+      try {
+        await refreshSigningTimeline();
+      } catch (err) {
+        showError(err.message);
+      }
     });
   </script>
 </body>
