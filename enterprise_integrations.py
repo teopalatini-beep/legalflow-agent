@@ -74,11 +74,15 @@ class ESignatureConnector:
     """Conector e-signature inicial (solicitud de firma)."""
 
     provider = "generic-esign"
+    signature_status_pending = "signature_pending"
+    signature_statuses = {"signature_pending", "signed", "declined", "voided"}
 
     def _real_provider_config(self) -> Dict[str, str]:
         return {
             "endpoint": os.getenv("LEGALFLOW_ESIGN_ENDPOINT", "").strip(),
             "api_key": os.getenv("LEGALFLOW_ESIGN_API_KEY", "").strip(),
+            "webhook_secret": os.getenv("LEGALFLOW_ESIGN_WEBHOOK_SECRET", "").strip(),
+            "app_base_url": os.getenv("LEGALFLOW_APP_BASE_URL", "").strip(),
         }
 
     def _real_request(
@@ -101,68 +105,219 @@ class ESignatureConnector:
             except json.JSONDecodeError:
                 return {"raw_response": response_raw}
 
-    def request_signature(
-        self, matter_id: str, signer_email: str, document_ref: str
+    def integration_health(self) -> Dict[str, Any]:
+        cfg = self._real_provider_config()
+        missing = []
+        if not cfg["endpoint"]:
+            missing.append("LEGALFLOW_ESIGN_ENDPOINT")
+        if not cfg["api_key"]:
+            missing.append("LEGALFLOW_ESIGN_API_KEY")
+        mode = "real" if not missing else "simulation"
+        return {
+            "provider": self.provider,
+            "mode": mode,
+            "required_vars_present": not missing,
+            "missing_vars": missing,
+            "webhook_secret_set": bool(cfg["webhook_secret"]),
+        }
+
+    def _simulation_envelope_id(self, matter_id: str, signer_email: str) -> str:
+        return f"env_{hashlib.md5(f'{matter_id}:{signer_email}'.encode()).hexdigest()[:14]}"
+
+    def _simulation_recipient_id(self, envelope_id: str, signer_email: str) -> str:
+        return f"rcp_{hashlib.md5(f'{envelope_id}:{signer_email}'.encode()).hexdigest()[:14]}"
+
+    def _simulation_signing_url(
+        self, envelope_id: str, recipient_id: str, return_url: str | None = None
+    ) -> str:
+        base = self._real_provider_config().get("app_base_url") or "https://legalflow.local"
+        callback = return_url or f"{base}/api/integrations/esign/callback"
+        return (
+            f"{base}/embedded-sign?envelope_id={envelope_id}"
+            f"&recipient_id={recipient_id}&return_url={callback}"
+        )
+
+    def create_envelope(
+        self,
+        matter_id: str,
+        signer_email: str,
+        document_ref: str,
+        signer_name: str = "",
     ) -> Dict[str, Any]:
         cfg = self._real_provider_config()
+        payload = {
+            "action": "create_envelope",
+            "matter_id": matter_id,
+            "signer_email": signer_email,
+            "signer_name": signer_name,
+            "document_ref": document_ref,
+        }
         if cfg["endpoint"] and cfg["api_key"]:
-            payload = {
-                "matter_id": matter_id,
-                "signer_email": signer_email,
-                "document_ref": document_ref,
-            }
             try:
                 external = self._real_request(cfg["endpoint"], cfg["api_key"], payload)
-                envelope_id = external.get("envelope_id") or external.get("id") or f"env_real_{hashlib.md5(matter_id.encode()).hexdigest()[:12]}"
+                envelope_id = (
+                    external.get("envelope_id")
+                    or external.get("id")
+                    or f"env_real_{hashlib.md5(matter_id.encode()).hexdigest()[:12]}"
+                )
+                recipient_id = (
+                    external.get("recipient_id")
+                    or external.get("signer_id")
+                    or self._simulation_recipient_id(envelope_id, signer_email)
+                )
+                result = {
+                    "provider": "external-esign",
+                    "mode": "real",
+                    "envelope_id": envelope_id,
+                    "recipient_id": recipient_id,
+                    "status": self.signature_status_pending,
+                    "external_response": external,
+                }
                 _append_event(
                     "esign_requests",
                     {
                         "provider": "external-esign",
                         "mode": "real",
+                        "status": "envelope_created",
                         "matter_id": matter_id,
                         "signer_email": signer_email,
                         "document_ref": document_ref,
                         "envelope_id": envelope_id,
+                        "recipient_id": recipient_id,
                         "external_response": external,
-                        "status": "signature_requested",
                     },
                 )
-                return {
-                    "provider": "external-esign",
-                    "mode": "real",
-                    "envelope_id": envelope_id,
-                    "status": "signature_requested",
-                }
+                return result
             except (error.URLError, TimeoutError, ValueError) as err:
                 _append_event(
                     "esign_requests",
                     {
                         "provider": "external-esign",
                         "mode": "fallback_simulation",
+                        "status": "provider_error_fallback",
                         "matter_id": matter_id,
                         "signer_email": signer_email,
                         "document_ref": document_ref,
-                        "status": "provider_error_fallback",
                         "error": str(err),
                     },
                 )
 
-        envelope_id = f"env_{hashlib.md5(f'{matter_id}:{signer_email}'.encode()).hexdigest()[:14]}"
+        envelope_id = self._simulation_envelope_id(matter_id, signer_email)
+        recipient_id = self._simulation_recipient_id(envelope_id, signer_email)
         _append_event(
             "esign_requests",
             {
                 "provider": self.provider,
                 "mode": "simulation",
+                "status": "envelope_created",
                 "matter_id": matter_id,
                 "signer_email": signer_email,
                 "document_ref": document_ref,
                 "envelope_id": envelope_id,
-                "status": "signature_requested",
+                "recipient_id": recipient_id,
             },
         )
         return {
             "provider": self.provider,
             "mode": "simulation",
             "envelope_id": envelope_id,
-            "status": "signature_requested",
+            "recipient_id": recipient_id,
+            "status": self.signature_status_pending,
+        }
+
+    def recipient_view(
+        self,
+        envelope_id: str,
+        recipient_id: str,
+        return_url: str | None = None,
+    ) -> Dict[str, Any]:
+        cfg = self._real_provider_config()
+        payload = {
+            "action": "recipient_view",
+            "envelope_id": envelope_id,
+            "recipient_id": recipient_id,
+            "return_url": return_url,
+        }
+        if cfg["endpoint"] and cfg["api_key"]:
+            try:
+                external = self._real_request(cfg["endpoint"], cfg["api_key"], payload)
+                signing_url = external.get("signing_url") or external.get("url")
+                if signing_url:
+                    result = {
+                        "provider": "external-esign",
+                        "mode": "real",
+                        "envelope_id": envelope_id,
+                        "recipient_id": recipient_id,
+                        "signing_url": signing_url,
+                        "status": self.signature_status_pending,
+                    }
+                    _append_event(
+                        "esign_requests",
+                        {
+                            "provider": "external-esign",
+                            "mode": "real",
+                            "status": "recipient_view_created",
+                            "envelope_id": envelope_id,
+                            "recipient_id": recipient_id,
+                            "signing_url": signing_url,
+                        },
+                    )
+                    return result
+            except (error.URLError, TimeoutError, ValueError) as err:
+                _append_event(
+                    "esign_requests",
+                    {
+                        "provider": "external-esign",
+                        "mode": "fallback_simulation",
+                        "status": "recipient_view_fallback",
+                        "envelope_id": envelope_id,
+                        "recipient_id": recipient_id,
+                        "error": str(err),
+                    },
+                )
+
+        signing_url = self._simulation_signing_url(envelope_id, recipient_id, return_url)
+        _append_event(
+            "esign_requests",
+            {
+                "provider": self.provider,
+                "mode": "simulation",
+                "status": "recipient_view_created",
+                "envelope_id": envelope_id,
+                "recipient_id": recipient_id,
+                "signing_url": signing_url,
+            },
+        )
+        return {
+            "provider": self.provider,
+            "mode": "simulation",
+            "envelope_id": envelope_id,
+            "recipient_id": recipient_id,
+            "signing_url": signing_url,
+            "status": self.signature_status_pending,
+        }
+
+    def request_signature(
+        self, matter_id: str, signer_email: str, document_ref: str
+    ) -> Dict[str, Any]:
+        envelope = self.create_envelope(matter_id, signer_email, document_ref)
+        _append_event(
+            "esign_requests",
+            {
+                "provider": envelope.get("provider", self.provider),
+                "mode": envelope.get("mode", "simulation"),
+                "matter_id": matter_id,
+                "signer_email": signer_email,
+                "document_ref": document_ref,
+                "envelope_id": envelope.get("envelope_id"),
+                "recipient_id": envelope.get("recipient_id"),
+                "status": "signature_requested",
+            },
+        )
+        return {
+            "provider": envelope.get("provider", self.provider),
+            "mode": envelope.get("mode", "simulation"),
+            "envelope_id": envelope.get("envelope_id"),
+            "recipient_id": envelope.get("recipient_id"),
+            "status": self.signature_status_pending,
         }

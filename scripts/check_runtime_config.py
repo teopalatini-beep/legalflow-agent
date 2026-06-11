@@ -18,6 +18,8 @@ def main() -> None:
     print_status("CURSOR_API_KEY")
     print_status("LEGALFLOW_ESIGN_ENDPOINT")
     print_status("LEGALFLOW_ESIGN_API_KEY")
+    print_status("LEGALFLOW_ESIGN_WEBHOOK_SECRET")
+    print_status("LEGALFLOW_APP_BASE_URL")
 
     if required_ok:
         print("\nConfiguration check: PASS")

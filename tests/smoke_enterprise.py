@@ -128,7 +128,44 @@ def run() -> None:
             json={"matter_id": matter_id, "signer_email": "legal@acme.com"},
             headers=admin_headers,
         )
-        assert_true("esign request", esign.status_code == 200 and esign.get_json().get("ok"))
+        esign_data = esign.get_json()
+        assert_true("esign request", esign.status_code == 200 and esign_data.get("ok"))
+        envelope_id = esign_data["integration"].get("envelope_id")
+        recipient_id = esign_data["integration"].get("recipient_id")
+        assert_true("esign request ids", bool(envelope_id) and bool(recipient_id))
+
+        create_envelope = c.post(
+            "/api/integrations/esign/create-envelope",
+            json={
+                "matter_id": matter_id,
+                "signer_email": "legal+2@acme.com",
+                "document_ref": "doc_v2",
+            },
+            headers=admin_headers,
+        )
+        envelope_data = create_envelope.get_json()
+        assert_true(
+            "esign create envelope",
+            create_envelope.status_code == 200 and envelope_data.get("ok"),
+        )
+        assert_true(
+            "esign envelope ids",
+            bool(envelope_data["integration"].get("envelope_id"))
+            and bool(envelope_data["integration"].get("recipient_id")),
+        )
+
+        recipient_view = c.post(
+            "/api/integrations/esign/recipient-view",
+            json={"matter_id": matter_id},
+            headers=admin_headers,
+        )
+        rv_data = recipient_view.get_json()
+        assert_true(
+            "esign recipient view",
+            recipient_view.status_code == 200
+            and rv_data.get("ok")
+            and bool(rv_data["integration"].get("signing_url")),
+        )
 
 
 if __name__ == "__main__":

@@ -72,6 +72,17 @@ def update_status(matter_id: str, status: str) -> Dict[str, Any]:
     return matter
 
 
+def update_esign_tracking(matter_id: str, tracking: Dict[str, Any]) -> Dict[str, Any]:
+    matter = get_matter(matter_id)
+    if not matter:
+        raise FileNotFoundError(f"Matter '{matter_id}' no existe.")
+    esign = matter.setdefault("esign", {})
+    esign.update(tracking)
+    matter["updated_at"] = datetime.now(timezone.utc).isoformat()
+    save_matter(matter_id, matter)
+    return matter
+
+
 def add_document_version(
     matter_id: str,
     *,

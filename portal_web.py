@@ -19,6 +19,7 @@ from matters_store import (
     decision_approval,
     get_matter,
     request_approvals,
+    update_esign_tracking,
     update_status,
 )
 from observability import CASES_DIR, audit_log, ensure_data_dirs, metric_log, redact_sensitive, retention_cleanup
@@ -86,6 +87,7 @@ def health() -> Any:
 
 @app.get("/api/health/config")
 def health_config() -> Any:
+    esign_health = esign_connector.integration_health()
     return jsonify(
         {
             "ok": True,
@@ -94,6 +96,9 @@ def health_config() -> Any:
                 "sso_token_set": bool(os.getenv("LEGALFLOW_SSO_TOKEN")),
                 "esign_endpoint_set": bool(os.getenv("LEGALFLOW_ESIGN_ENDPOINT")),
                 "esign_api_key_set": bool(os.getenv("LEGALFLOW_ESIGN_API_KEY")),
+                "esign_webhook_secret_set": bool(os.getenv("LEGALFLOW_ESIGN_WEBHOOK_SECRET")),
+                "esign_mode": esign_health["mode"],
+                "esign_missing_vars": esign_health["missing_vars"],
             },
         }
     )
@@ -348,8 +353,26 @@ def firmar_matter(matter_id: str) -> Any:
     if not signer_email:
         return error_response("Falta signer_email.", 400, "missing_signer_email")
     document_ref = payload.get("document_ref", matter_id)
-    esign_result = esign_connector.request_signature(matter_id, signer_email, document_ref)
+    signer_name = payload.get("signer_name", "")
+    esign_result = esign_connector.create_envelope(
+        matter_id=matter_id,
+        signer_email=signer_email,
+        document_ref=document_ref,
+        signer_name=signer_name,
+    )
     update_status(matter_id, "signature_pending")
+    update_esign_tracking(
+        matter_id,
+        {
+            "provider": esign_result.get("provider"),
+            "mode": esign_result.get("mode"),
+            "status": esign_result.get("status", "signature_pending"),
+            "envelope_id": esign_result.get("envelope_id"),
+            "recipient_id": esign_result.get("recipient_id"),
+            "signer_email": signer_email,
+            "document_ref": document_ref,
+        },
+    )
     updated = append_event(
         matter_id,
         "signature_requested",
@@ -491,7 +514,108 @@ def request_esign() -> Any:
     if not matter:
         return error_response("Matter no encontrado.", 404, "matter_not_found")
     result = esign_connector.request_signature(matter_id, signer_email, document_ref)
+    update_status(matter_id, "signature_pending")
+    update_esign_tracking(
+        matter_id,
+        {
+            "provider": result.get("provider"),
+            "mode": result.get("mode"),
+            "status": result.get("status", "signature_pending"),
+            "envelope_id": result.get("envelope_id"),
+            "recipient_id": result.get("recipient_id"),
+            "signer_email": signer_email,
+            "document_ref": document_ref,
+        },
+    )
     append_event(matter_id, "esign_requested", {"by": sso_context(request)["email"], **result})
+    return jsonify({"ok": True, "integration": result})
+
+
+@app.post("/api/integrations/esign/create-envelope")
+@require_sso(required_groups=["legal_admin", "legal_ops"])
+def create_esign_envelope() -> Any:
+    payload = json_payload()
+    matter_id = payload.get("matter_id")
+    signer_email = payload.get("signer_email")
+    signer_name = payload.get("signer_name", "")
+    document_ref = payload.get("document_ref", matter_id)
+    if not matter_id or not signer_email:
+        return error_response(
+            "Faltan matter_id o signer_email.", 400, "missing_fields"
+        )
+    if not validar_matter_id(matter_id):
+        return error_response("matter_id invalido.", 400, "invalid_matter_id")
+    matter = get_matter(matter_id)
+    if not matter:
+        return error_response("Matter no encontrado.", 404, "matter_not_found")
+    result = esign_connector.create_envelope(
+        matter_id=matter_id,
+        signer_email=signer_email,
+        document_ref=document_ref,
+        signer_name=signer_name,
+    )
+    update_status(matter_id, "signature_pending")
+    update_esign_tracking(
+        matter_id,
+        {
+            "provider": result.get("provider"),
+            "mode": result.get("mode"),
+            "status": result.get("status", "signature_pending"),
+            "envelope_id": result.get("envelope_id"),
+            "recipient_id": result.get("recipient_id"),
+            "signer_email": signer_email,
+            "document_ref": document_ref,
+        },
+    )
+    append_event(
+        matter_id,
+        "esign_envelope_created",
+        {"by": sso_context(request)["email"], **result},
+    )
+    return jsonify({"ok": True, "integration": result})
+
+
+@app.post("/api/integrations/esign/recipient-view")
+@require_sso(required_groups=["legal_admin", "legal_ops"])
+def create_esign_recipient_view() -> Any:
+    payload = json_payload()
+    matter_id = payload.get("matter_id")
+    if not matter_id:
+        return error_response("Falta matter_id.", 400, "missing_matter_id")
+    if not validar_matter_id(matter_id):
+        return error_response("matter_id invalido.", 400, "invalid_matter_id")
+    matter = get_matter(matter_id)
+    if not matter:
+        return error_response("Matter no encontrado.", 404, "matter_not_found")
+    esign_tracking = matter.get("esign", {})
+    envelope_id = payload.get("envelope_id") or esign_tracking.get("envelope_id")
+    recipient_id = payload.get("recipient_id") or esign_tracking.get("recipient_id")
+    return_url = payload.get("return_url")
+    if not envelope_id or not recipient_id:
+        return error_response(
+            "Faltan envelope_id o recipient_id.", 400, "missing_envelope_or_recipient"
+        )
+    result = esign_connector.recipient_view(
+        envelope_id=envelope_id,
+        recipient_id=recipient_id,
+        return_url=return_url,
+    )
+    update_esign_tracking(
+        matter_id,
+        {
+            "provider": result.get("provider"),
+            "mode": result.get("mode"),
+            "status": result.get("status", "signature_pending"),
+            "envelope_id": envelope_id,
+            "recipient_id": recipient_id,
+            "signing_url": result.get("signing_url"),
+        },
+    )
+    append_event(
+        matter_id,
+        "esign_recipient_view_created",
+        {"by": sso_context(request)["email"], **result},
+    )
     return jsonify({"ok": True, "integration": result})
 
 

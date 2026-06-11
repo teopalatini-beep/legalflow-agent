@@ -117,16 +117,26 @@ def main() -> None:
             raise RuntimeError(f"Aprobar matter fallo: {approve.get_json()}")
         print("OK: matter aprobado")
 
-        esign = c.post(
-            "/api/integrations/esign/request",
+        create_envelope = c.post(
+            "/api/integrations/esign/create-envelope",
             json={"matter_id": matter_id, "signer_email": "legal@acme.com"},
             headers=headers,
         )
-        e_data = esign.get_json()
-        if not e_data.get("ok"):
-            raise RuntimeError(f"E-sign request fallo: {e_data}")
-        mode = e_data["integration"].get("mode", "simulation")
-        print("OK: e-sign solicitado en modo", mode)
+        env_data = create_envelope.get_json()
+        if not env_data.get("ok"):
+            raise RuntimeError(f"E-sign create-envelope fallo: {env_data}")
+        mode = env_data["integration"].get("mode", "simulation")
+        print("OK: e-sign envelope creado en modo", mode)
+
+        recipient_view = c.post(
+            "/api/integrations/esign/recipient-view",
+            json={"matter_id": matter_id},
+            headers=headers,
+        )
+        rv_data = recipient_view.get_json()
+        if not rv_data.get("ok"):
+            raise RuntimeError(f"E-sign recipient-view fallo: {rv_data}")
+        print("OK: recipient-view listo")
 
         timeline = c.get(f"/api/matters/{matter_id}/timeline", headers=headers)
         tl_data = timeline.get_json()
