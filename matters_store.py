@@ -83,6 +83,29 @@ def update_esign_tracking(matter_id: str, tracking: Dict[str, Any]) -> Dict[str,
     return matter
 
 
+def register_esign_webhook_event_id(matter_id: str, event_id: str) -> bool:
+    matter = get_matter(matter_id)
+    if not matter:
+        raise FileNotFoundError(f"Matter '{matter_id}' no existe.")
+    esign = matter.setdefault("esign", {})
+    processed = esign.setdefault("processed_event_ids", [])
+    if event_id in processed:
+        return False
+    processed.append(event_id)
+    matter["updated_at"] = datetime.now(timezone.utc).isoformat()
+    save_matter(matter_id, matter)
+    return True
+
+
+def find_matter_by_envelope_id(envelope_id: str) -> Dict[str, Any] | None:
+    _ensure_dir()
+    for path in MATTERS_DIR.glob("*.json"):
+        matter = json.loads(path.read_text(encoding="utf-8"))
+        if matter.get("esign", {}).get("envelope_id") == envelope_id:
+            return matter
+    return None
+
+
 def add_document_version(
     matter_id: str,
     *,

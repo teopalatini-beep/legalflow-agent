@@ -138,10 +138,27 @@ def main() -> None:
             raise RuntimeError(f"E-sign recipient-view fallo: {rv_data}")
         print("OK: recipient-view listo")
 
+        webhook = c.post(
+            "/api/integrations/esign/webhook",
+            json={
+                "event_id": "evt_demo_signed_001",
+                "matter_id": matter_id,
+                "envelope_id": env_data["integration"]["envelope_id"],
+                "recipient_id": env_data["integration"]["recipient_id"],
+                "status": "completed",
+            },
+        )
+        wh_data = webhook.get_json()
+        if not wh_data.get("ok") or wh_data.get("status") != "signed":
+            raise RuntimeError(f"E-sign webhook fallo: {wh_data}")
+        print("OK: webhook procesado (signed)")
+
         timeline = c.get(f"/api/matters/{matter_id}/timeline", headers=headers)
         tl_data = timeline.get_json()
         if not tl_data.get("ok"):
             raise RuntimeError(f"Timeline fallo: {tl_data}")
+        if tl_data.get("status") != "signed":
+            raise RuntimeError(f"Estado final inesperado: {tl_data.get('status')}")
         print("OK: timeline consultada con", len(tl_data.get("events", [])), "eventos")
 
         print("\nDemo flow completo.")

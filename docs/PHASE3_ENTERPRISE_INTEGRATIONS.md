@@ -28,6 +28,7 @@ export LEGALFLOW_SSO_TOKEN="super-secret-token"
 ### Integrations
 - `POST /api/integrations/esign/create-envelope`
 - `POST /api/integrations/esign/recipient-view`
+- `POST /api/integrations/esign/webhook`
 - `POST /api/integrations/crm/sync`
 - `POST /api/integrations/dms/upload`
 - `POST /api/integrations/esign/request`
@@ -48,6 +49,7 @@ En e-sign se persiste trazabilidad en el matter:
 - `esign.envelope_id`
 - `esign.recipient_id`
 - `esign.signing_url` (cuando se solicita recipient-view)
+- `esign.processed_event_ids` (idempotencia webhook)
 - `status` estandarizado: `signature_pending`, `signed`, `declined`, `voided`
 
 ## Modo real vs modo simulacion (bloqueos por key)
@@ -63,3 +65,23 @@ En e-sign se persiste trazabilidad en el matter:
   - `"mode": "fallback_simulation"`
 
 Esto permite continuar con el resto del flujo sin bloquear la operación.
+
+## Webhook de e-sign (estado + idempotencia)
+
+Endpoint:
+- `POST /api/integrations/esign/webhook`
+
+Payload minimo:
+- `event_id` (si falta, se calcula hash deterministico del payload)
+- `status` (`signature_pending`, `signed`, `declined`, `voided` o aliases como `completed`)
+- `matter_id` o `envelope_id`
+
+Reglas:
+- Si `LEGALFLOW_ESIGN_WEBHOOK_SECRET` esta seteada, se valida firma HMAC SHA-256
+  usando header `X-ESIGN-SIGNATURE` (acepta formato `sha256=<hex>`).
+- Eventos duplicados (`event_id` ya procesado) responden `ok: true` con `duplicate: true`
+  y no generan nuevo evento en timeline.
+- Eventos nuevos actualizan:
+  - `matter.status`
+  - `matter.esign.status`
+  - timeline con `esign_webhook_received`

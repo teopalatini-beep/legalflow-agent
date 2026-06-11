@@ -4,6 +4,7 @@ import json
 import os
 import re
 import hashlib
+import hmac
 from datetime import datetime, timezone
 from typing import Any, Dict
 from uuid import uuid4
@@ -17,7 +18,9 @@ from matters_store import (
     append_event,
     create_matter,
     decision_approval,
+    find_matter_by_envelope_id,
     get_matter,
+    register_esign_webhook_event_id,
     request_approvals,
     update_esign_tracking,
     update_status,
@@ -46,6 +49,59 @@ def json_payload() -> Dict[str, Any]:
 
 def validar_matter_id(matter_id: str) -> bool:
     return bool(MATTER_ID_PATTERN.match(matter_id))
+
+
+def _normalize_esign_status(raw_status: str) -> str | None:
+    normalized = raw_status.strip().lower().replace(" ", "_")
+    if not normalized:
+        return None
+    normalized = normalized.replace("-", "_")
+    aliases = {
+        "created": "signature_pending",
+        "pending": "signature_pending",
+        "sent": "signature_pending",
+        "delivered": "signature_pending",
+        "signature_requested": "signature_pending",
+        "completed": "signed",
+        "rejected": "declined",
+        "canceled": "voided",
+        "cancelled": "voided",
+    }
+    if normalized in aliases:
+        normalized = aliases[normalized]
+    if normalized in esign_connector.signature_statuses:
+        return normalized
+    return None
+
+
+def _resolve_webhook_event_id(payload: Dict[str, Any]) -> str:
+    event_id = (
+        payload.get("event_id")
+        or payload.get("eventId")
+        or payload.get("id")
+        or payload.get("webhook_id")
+    )
+    if event_id:
+        return str(event_id)
+    fingerprint = json.dumps(payload, ensure_ascii=True, sort_keys=True)
+    return "evt_" + hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:24]
+
+
+def _verify_esign_webhook_signature(raw_body: bytes) -> bool:
+    secret = os.getenv("LEGALFLOW_ESIGN_WEBHOOK_SECRET", "").strip()
+    if not secret:
+        return True
+    provided = (
+        request.headers.get("X-ESIGN-SIGNATURE", "").strip()
+        or request.headers.get("X-WEBHOOK-SIGNATURE", "").strip()
+        or request.headers.get("X-HUB-SIGNATURE-256", "").strip()
+    )
+    if provided.startswith("sha256="):
+        provided = provided.split("=", 1)[1]
+    if not provided:
+        return False
+    expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(provided, expected)
 
 
 @app.get("/")
@@ -617,6 +673,110 @@ def create_esign_recipient_view() -> Any:
         {"by": sso_context(request)["email"], **result},
     )
     return jsonify({"ok": True, "integration": result})
+
+
+@app.post("/api/integrations/esign/webhook")
+def esign_webhook() -> Any:
+    raw_body = request.get_data(cache=True) or b""
+    if not _verify_esign_webhook_signature(raw_body):
+        audit_log(
+            "esign_webhook_invalid_signature",
+            {"reason": "signature_mismatch", "path": request.path},
+        )
+        return error_response(
+            "Firma de webhook invalida.", 401, "invalid_webhook_signature"
+        )
+
+    payload = json_payload()
+    envelope_id = str(payload.get("envelope_id") or payload.get("envelopeId") or "").strip()
+    matter_id = str(payload.get("matter_id") or payload.get("matterId") or "").strip()
+    raw_status = str(payload.get("status") or payload.get("event") or "").strip()
+    status = _normalize_esign_status(raw_status)
+    if not status:
+        return error_response(
+            "status invalido para webhook e-sign.", 400, "invalid_esign_status"
+        )
+    if not matter_id:
+        if not envelope_id:
+            return error_response(
+                "Falta matter_id o envelope_id.", 400, "missing_fields"
+            )
+        matter = find_matter_by_envelope_id(envelope_id)
+        if not matter:
+            return error_response(
+                "Matter no encontrado para envelope_id.", 404, "matter_not_found"
+            )
+        matter_id = matter.get("matter_id", "")
+    if not validar_matter_id(matter_id):
+        return error_response("matter_id invalido.", 400, "invalid_matter_id")
+    matter = get_matter(matter_id)
+    if not matter:
+        return error_response("Matter no encontrado.", 404, "matter_not_found")
+    if not envelope_id:
+        envelope_id = str(matter.get("esign", {}).get("envelope_id") or "").strip()
+    if not envelope_id:
+        return error_response(
+            "No se encontro envelope_id asociado al matter.", 400, "missing_envelope_id"
+        )
+    recipient_id = str(
+        payload.get("recipient_id")
+        or payload.get("recipientId")
+        or matter.get("esign", {}).get("recipient_id")
+        or ""
+    ).strip()
+    event_id = _resolve_webhook_event_id(payload)
+    is_new = register_esign_webhook_event_id(matter_id, event_id)
+    if not is_new:
+        return jsonify(
+            {
+                "ok": True,
+                "duplicate": True,
+                "matter_id": matter_id,
+                "event_id": event_id,
+                "status": matter.get("status"),
+            }
+        )
+
+    update_status(matter_id, status)
+    update_esign_tracking(
+        matter_id,
+        {
+            "status": status,
+            "envelope_id": envelope_id,
+            "recipient_id": recipient_id,
+            "last_webhook_event_id": event_id,
+            "last_webhook_at": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+    append_event(
+        matter_id,
+        "esign_webhook_received",
+        {
+            "event_id": event_id,
+            "envelope_id": envelope_id,
+            "recipient_id": recipient_id,
+            "status": status,
+            "raw_status": raw_status,
+            "source": "esign_webhook",
+        },
+    )
+    audit_log(
+        "esign_webhook_processed",
+        {
+            "matter_id": matter_id,
+            "event_id": event_id,
+            "status": status,
+        },
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "duplicate": False,
+            "matter_id": matter_id,
+            "event_id": event_id,
+            "status": status,
+        }
+    )
 
 
 if __name__ == "__main__":

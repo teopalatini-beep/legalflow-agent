@@ -167,6 +167,50 @@ def run() -> None:
             and bool(rv_data["integration"].get("signing_url")),
         )
 
+        webhook = c.post(
+            "/api/integrations/esign/webhook",
+            json={
+                "event_id": "evt_smoke_signed_001",
+                "matter_id": matter_id,
+                "envelope_id": envelope_data["integration"]["envelope_id"],
+                "recipient_id": envelope_data["integration"]["recipient_id"],
+                "status": "completed",
+            },
+        )
+        wh_data = webhook.get_json()
+        assert_true(
+            "esign webhook signed",
+            webhook.status_code == 200
+            and wh_data.get("ok")
+            and wh_data.get("status") == "signed"
+            and wh_data.get("duplicate") is False,
+        )
+
+        webhook_dup = c.post(
+            "/api/integrations/esign/webhook",
+            json={
+                "event_id": "evt_smoke_signed_001",
+                "matter_id": matter_id,
+                "envelope_id": envelope_data["integration"]["envelope_id"],
+                "status": "completed",
+            },
+        )
+        dup_data = webhook_dup.get_json()
+        assert_true(
+            "esign webhook idempotent",
+            webhook_dup.status_code == 200 and dup_data.get("ok") and dup_data.get("duplicate") is True,
+        )
+
+        timeline_after_webhook = c.get(f"/api/matters/{matter_id}/timeline", headers=viewer_headers)
+        tah_data = timeline_after_webhook.get_json()
+        webhook_events = [e for e in tah_data.get("events", []) if e.get("type") == "esign_webhook_received"]
+        assert_true(
+            "esign webhook timeline state",
+            timeline_after_webhook.status_code == 200
+            and tah_data.get("status") == "signed"
+            and len(webhook_events) == 1,
+        )
+
 
 if __name__ == "__main__":
     run()
