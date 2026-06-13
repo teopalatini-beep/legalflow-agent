@@ -37,6 +37,10 @@ Demostrar en 10-12 minutos que LegalFlow reduce riesgo contractual, acelera deci
    - `Refrescar timeline`.
 7. Cerrar mostrando badge de estado:
    - `draft -> signature_pending -> signed`.
+8. Durante toda la demo, usar los bloques visuales:
+   - `Demo guiada` (paso recomendado),
+   - `Valor visible del paso actual` (evidencia + impacto),
+   - mensajes de éxito/acción para el abogado.
 
 ## Opcion 2: Demo automatizada por script
 ```bash

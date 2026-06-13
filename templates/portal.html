@@ -35,7 +35,18 @@
     .btn-secondary { background: #edf1ff; color: #1e2f8f; }
     .btn-ghost { background: #f7f9ff; color: #3a4a63; border: 1px solid var(--line); }
     .error { display: none; margin-top: 8px; background: #ffe9ea; color: #942737; padding: 8px 10px; border-radius: 8px; font-size: 12px; }
+    .success { display: none; margin-top: 8px; background: #e6f7ee; color: #0f6f3d; padding: 8px 10px; border-radius: 8px; font-size: 12px; }
     .muted { color: var(--muted); font-size: 12px; }
+    .guide-box { border: 1px solid var(--line); background: #f8faff; border-radius: 10px; padding: 10px; margin-bottom: 12px; }
+    .guide-title { margin: 0 0 8px; font-size: 12px; color: #23335a; font-weight: 700; }
+    .guided-steps { display: grid; grid-template-columns: 1fr; gap: 6px; }
+    .guided-step { border: 1px solid var(--line); border-radius: 8px; padding: 8px; font-size: 12px; color: #4a5875; background: #fff; }
+    .guided-step.current { border-color: #9eb0ff; color: #1d35b0; background: #eef2ff; }
+    .guided-step.done { border-color: #9adab7; color: #0b6b3b; background: #e8f7ef; }
+    .value-box { border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: #f6f8ff; margin-bottom: 12px; }
+    .value-title { font-size: 12px; font-weight: 700; margin-bottom: 5px; color: #1f2f5e; }
+    .value-evidence { font-size: 12px; color: #31405d; margin-bottom: 4px; }
+    .value-impact { font-size: 12px; color: #0f6f3d; font-weight: 700; }
     .tag { display: inline-block; font-size: 11px; padding: 3px 8px; border-radius: 999px; margin: 2px 6px 2px 0; background: #e9edff; color: #2a3fbe; }
     .risk { border: 1px solid var(--line); border-left: 4px solid var(--warn); border-radius: 8px; padding: 10px; margin-bottom: 10px; font-size: 13px; }
     .risk.high { border-left-color: var(--danger); }
@@ -64,6 +75,15 @@
     <section class="panel">
       <div class="panel-head">Panel 1 · Contrato y configuracion</div>
       <div class="panel-body">
+        <div class="guide-box">
+          <p class="guide-title">Demo guiada (primer valor en menos de 2 minutos)</p>
+          <div class="guided-steps">
+            <div id="guide-step-1" class="guided-step">Paso 1 · Cargar demo</div>
+            <div id="guide-step-2" class="guided-step">Paso 2 · Analizar y priorizar riesgos</div>
+            <div id="guide-step-3" class="guided-step">Paso 3 · Guardar caso y cerrar con firma</div>
+          </div>
+          <div id="step-help" class="mini">Siguiente acción recomendada: Click en "Cargar demo".</div>
+        </div>
         <form id="analysis-form">
           <div class="row">
             <div class="field">
@@ -115,6 +135,7 @@
             <button class="btn-ghost" id="export-pdf-btn" type="button">Exportar PDF</button>
           </div>
           <div class="error" id="error-box"></div>
+          <div class="success" id="success-box"></div>
         </form>
         <p class="muted" id="run-meta">Sin ejecuciones todavia.</p>
       </div>
@@ -123,6 +144,12 @@
     <section class="panel">
       <div class="panel-head">Panel 2 · Riesgos y trazabilidad</div>
       <div class="panel-body">
+        <h4>Valor visible del paso actual</h4>
+        <div id="value-box" class="value-box">
+          <div id="value-title" class="value-title">Esperando inicio de demo</div>
+          <div id="value-evidence" class="value-evidence">Aun no hay evidencia visible. Carga la demo para empezar.</div>
+          <div id="value-impact" class="value-impact">Impacto: inicio guiado para abogado.</div>
+        </div>
         <h4>Resumen</h4>
         <pre id="resumen">Sin resumen.</pre>
         <h4>Accion recomendada</h4>
@@ -183,6 +210,7 @@
   <script>
     const form = document.getElementById("analysis-form");
     const errorBox = document.getElementById("error-box");
+    const successBox = document.getElementById("success-box");
     const runMeta = document.getElementById("run-meta");
     const resumen = document.getElementById("resumen");
     const accion = document.getElementById("accion");
@@ -195,6 +223,10 @@
     const signingStatus = document.getElementById("signing-status");
     const signingMeta = document.getElementById("signing-meta");
     const signingTimeline = document.getElementById("signing-timeline");
+    const valueTitle = document.getElementById("value-title");
+    const valueEvidence = document.getElementById("value-evidence");
+    const valueImpact = document.getElementById("value-impact");
+    const stepHelp = document.getElementById("step-help");
     let latestResult = null;
     let latestContract = "";
     const signingState = {
@@ -204,6 +236,18 @@
       signingUrl: "",
       status: "draft",
     };
+    const progressState = {
+      loadedDemo: false,
+      analyzed: false,
+      caseSaved: false,
+      signingStarted: false,
+      signed: false,
+    };
+    const guideStepElements = [
+      document.getElementById("guide-step-1"),
+      document.getElementById("guide-step-2"),
+      document.getElementById("guide-step-3"),
+    ];
     const DEMO_PAYLOAD = {
       cliente_id: "default",
       modo_analisis: "strict_playbook",
@@ -214,12 +258,74 @@
     };
 
     function showError(message) {
+      clearSuccess();
       errorBox.textContent = message;
       errorBox.style.display = "block";
     }
     function clearError() {
       errorBox.textContent = "";
       errorBox.style.display = "none";
+    }
+    function showSuccess(message) {
+      clearError();
+      successBox.textContent = message;
+      successBox.style.display = "block";
+    }
+    function clearSuccess() {
+      successBox.textContent = "";
+      successBox.style.display = "none";
+    }
+    function updateValueCard(title, evidence, impact) {
+      valueTitle.textContent = title;
+      valueEvidence.textContent = evidence;
+      valueImpact.textContent = "Impacto: " + impact;
+    }
+    function updateGuideStep() {
+      if (progressState.signed) {
+        guideStepElements.forEach((el) => {
+          el.classList.remove("current");
+          el.classList.add("done");
+        });
+        stepHelp.textContent = "Recorrido completo: ya tienes valor visible y trazabilidad final.";
+        return;
+      }
+      const stepIndex = !progressState.loadedDemo ? 0 : (!progressState.analyzed ? 1 : 2);
+      guideStepElements.forEach((el, idx) => {
+        el.classList.remove("current", "done");
+        if (idx < stepIndex) el.classList.add("done");
+        if (idx === stepIndex) el.classList.add("current");
+      });
+      if (!progressState.loadedDemo) {
+        stepHelp.textContent = 'Siguiente acción recomendada: Click en "Cargar demo".';
+      } else if (!progressState.analyzed) {
+        stepHelp.textContent = 'Siguiente acción recomendada: Click en "Analizar".';
+      } else if (!progressState.caseSaved) {
+        stepHelp.textContent = 'Siguiente acción recomendada: Click en "Guardar caso".';
+      } else if (!progressState.signingStarted) {
+        stepHelp.textContent = 'Siguiente acción recomendada: Click en "Iniciar firma".';
+      } else if (!progressState.signed) {
+        stepHelp.textContent = 'Siguiente acción recomendada: Click en "Simular firmado".';
+      }
+    }
+    function setProgress(key, value = true) {
+      progressState[key] = value;
+      updateGuideStep();
+    }
+    async function parseApiResponse(response, fallbackError) {
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        const code = data.code ? ` [${data.code}]` : "";
+        let hint = "";
+        if (data.code === "sso_missing_headers" || data.code === "sso_invalid_token") {
+          hint = " Completa SSO token y grupos del panel de firma.";
+        } else if (data.code === "missing_signer_email") {
+          hint = " Revisa el campo signer email.";
+        } else if (data.code === "missing_envelope_or_recipient") {
+          hint = " Inicia firma antes de abrir recipient-view.";
+        }
+        throw new Error((data.error || fallbackError) + code + hint);
+      }
+      return data;
     }
     function riskClass(level) {
       const lower = (level || "").toLowerCase();
@@ -273,13 +379,16 @@
           obligations: [],
         }),
       });
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || "No se pudo crear el matter demo.");
-      }
+      const data = await parseApiResponse(response, "No se pudo crear el matter demo.");
       signingState.matterId = data.matter.matter_id;
       setSigningStatus(data.matter.status || "draft");
       updateSigningMeta({ created: true });
+      showSuccess("Matter demo creado. Ya puedes iniciar firma.");
+      updateValueCard(
+        "Matter generado con trazabilidad",
+        `matter_id: ${signingState.matterId}`,
+        "Continuidad operativa del caso y base para aprobación/firma."
+      );
       runMeta.textContent = `Matter demo activo: ${signingState.matterId}`;
       return signingState.matterId;
     }
@@ -292,10 +401,7 @@
         method: "GET",
         headers: getSsoHeaders("legal_admin,legal_ops,legal_viewer"),
       });
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || "No se pudo obtener timeline.");
-      }
+      const data = await parseApiResponse(response, "No se pudo obtener timeline.");
       setSigningStatus(data.status || signingState.status);
       const timelineEvents = (data.events || []).filter((e) => String(e.type || "").startsWith("esign") || e.type === "signature_requested");
       if (timelineEvents.length === 0) {
@@ -315,6 +421,7 @@
       }
       updateSigningMeta({ timeline_events: timelineEvents.length });
     }
+    updateGuideStep();
 
     function renderRiesgos(data, evidencias = {}) {
       riesgos.innerHTML = "";
@@ -402,11 +509,19 @@
       }, null, 2);
       comparacion.textContent = compareData ? JSON.stringify(compareData, null, 2) : "Sin comparacion.";
       runMeta.textContent = `Run: ${result.run_id || "-"} · Calidad: ${result.quality_score || 0}`;
+      const risks = (result.riesgos_detectados || []).length;
+      const redlinesCount = (result.redlines_sugeridos || []).length;
+      updateValueCard(
+        "Analisis profundo completado",
+        `Riesgos detectados: ${risks} · Redlines sugeridos: ${redlinesCount} · Quality score: ${result.quality_score || 0}`,
+        "Decisión legal más rápida con priorización objetiva y recomendaciones accionables."
+      );
     }
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       clearError();
+      clearSuccess();
       const submitBtn = document.getElementById("submit-btn");
       submitBtn.disabled = true;
       submitBtn.textContent = "Analizando...";
@@ -417,9 +532,10 @@
 
       try {
         const response = await fetch("/api/analizar", { method: "POST", body: formData });
-        const data = await response.json();
-        if (!response.ok || !data.ok) throw new Error(data.error || "Error al analizar.");
+        const data = await parseApiResponse(response, "Error al analizar.");
         renderResult(data.resultado, data.comparacion || null);
+        setProgress("analyzed", true);
+        showSuccess("Analisis completado. Ya tienes resumen, riesgos priorizados y recomendaciones.");
       } catch (err) {
         showError(err.message);
       } finally {
@@ -430,17 +546,26 @@
 
     document.getElementById("load-demo-btn").addEventListener("click", () => {
       clearError();
+      clearSuccess();
       document.getElementById("modo").value = "local";
       document.getElementById("modelo").value = "composer-2.5";
       document.getElementById("cliente_id").value = DEMO_PAYLOAD.cliente_id;
       document.getElementById("modo_analisis").value = DEMO_PAYLOAD.modo_analisis;
       document.getElementById("contrato").value = DEMO_PAYLOAD.contrato_a;
       document.getElementById("contrato_b").value = DEMO_PAYLOAD.contrato_b;
+      setProgress("loadedDemo", true);
+      updateValueCard(
+        "Demo lista para ejecutar",
+        "Contrato A/B cargado automaticamente con configuración recomendada.",
+        "Inicio inmediato sin preparación manual."
+      );
+      showSuccess("Demo cargada. Siguiente paso: click en Analizar.");
       runMeta.textContent = "Demo cargada: presiona Analizar para ejecutar el recorrido comercial.";
     });
 
     document.getElementById("save-case-btn").addEventListener("click", async () => {
       clearError();
+      clearSuccess();
       if (!latestResult) {
         showError("Primero corre un analisis.");
         return;
@@ -458,9 +583,14 @@
             resultado: latestResult,
           }),
         });
-        const data = await res.json();
-        if (!res.ok || !data.ok) throw new Error(data.error || "No se pudo guardar.");
-        alert("Caso guardado: " + data.case_id);
+        const data = await parseApiResponse(res, "No se pudo guardar.");
+        setProgress("caseSaved", true);
+        updateValueCard(
+          "Caso persistido",
+          `case_id: ${data.case_id}`,
+          "Continuidad del trabajo legal y reapertura inmediata para el equipo."
+        );
+        showSuccess("Caso guardado: " + data.case_id);
       } catch (err) {
         showError(err.message);
       }
@@ -468,10 +598,10 @@
 
     document.getElementById("load-cases-btn").addEventListener("click", async () => {
       clearError();
+      clearSuccess();
       try {
         const res = await fetch("/api/casos");
-        const data = await res.json();
-        if (!res.ok || !data.ok) throw new Error(data.error || "No se pudieron cargar casos.");
+        const data = await parseApiResponse(res, "No se pudieron cargar casos.");
         if (!Array.isArray(data.casos) || data.casos.length === 0) {
           casesList.textContent = "No hay casos guardados.";
           return;
@@ -485,8 +615,9 @@
           btn.textContent = `${item.titulo} (${item.case_id})`;
           btn.addEventListener("click", async () => {
             const caseRes = await fetch("/api/casos/" + item.case_id);
-            const caseData = await caseRes.json();
+            const caseData = await parseApiResponse(caseRes, "No se pudo abrir el caso.");
             if (caseData.ok) renderResult(caseData.caso.resultado);
+            showSuccess("Caso reabierto: " + item.case_id);
           });
           casesList.appendChild(btn);
         });
@@ -515,6 +646,7 @@
 
     document.getElementById("create-matter-btn").addEventListener("click", async () => {
       clearError();
+      clearSuccess();
       try {
         await ensureMatterForSigning();
         await refreshSigningTimeline();
@@ -525,6 +657,7 @@
 
     document.getElementById("start-signing-btn").addEventListener("click", async () => {
       clearError();
+      clearSuccess();
       try {
         const matterId = await ensureMatterForSigning();
         const response = await fetch("/api/integrations/esign/create-envelope", {
@@ -536,12 +669,22 @@
             document_ref: latestResult?.run_id || matterId,
           }),
         });
-        const data = await response.json();
-        if (!response.ok || !data.ok) throw new Error(data.error || "No se pudo iniciar firma.");
+        const data = await parseApiResponse(response, "No se pudo iniciar firma.");
         signingState.envelopeId = data.integration.envelope_id || "";
         signingState.recipientId = data.integration.recipient_id || "";
         setSigningStatus(data.integration.status || "signature_pending");
+        setProgress("signingStarted", true);
         updateSigningMeta({ mode: data.integration.mode || "simulation" });
+        if ((data.integration.mode || "") === "simulation") {
+          showSuccess("Firma iniciada en modo simulacion. El flujo de valor continua sin credenciales reales.");
+        } else {
+          showSuccess("Firma iniciada con integracion real.");
+        }
+        updateValueCard(
+          "Firma iniciada",
+          `envelope_id: ${signingState.envelopeId || "-"} · recipient_id: ${signingState.recipientId || "-"}`,
+          "Visibilidad inmediata del estado contractual y siguiente acción."
+        );
         await refreshSigningTimeline();
       } catch (err) {
         showError(err.message);
@@ -550,6 +693,7 @@
 
     document.getElementById("open-signing-btn").addEventListener("click", async () => {
       clearError();
+      clearSuccess();
       try {
         const matterId = await ensureMatterForSigning();
         if (!signingState.envelopeId || !signingState.recipientId) {
@@ -560,10 +704,15 @@
           headers: getSsoHeaders(),
           body: JSON.stringify({ matter_id: matterId }),
         });
-        const data = await response.json();
-        if (!response.ok || !data.ok) throw new Error(data.error || "No se pudo generar recipient-view.");
+        const data = await parseApiResponse(response, "No se pudo generar recipient-view.");
         signingState.signingUrl = data.integration.signing_url || "";
         updateSigningMeta({ recipient_view: true });
+        showSuccess("Recipient-view generado. Puedes abrir la firma embebida.");
+        updateValueCard(
+          "Firma embebida disponible",
+          `signing_url: ${signingState.signingUrl ? "generada" : "no disponible"}`,
+          "Experiencia simple para abogado y contraparte sin salir del flujo."
+        );
         if (signingState.signingUrl) window.open(signingState.signingUrl, "_blank", "noopener,noreferrer");
         await refreshSigningTimeline();
       } catch (err) {
@@ -573,6 +722,7 @@
 
     document.getElementById("simulate-signed-btn").addEventListener("click", async () => {
       clearError();
+      clearSuccess();
       try {
         const matterId = await ensureMatterForSigning();
         if (!signingState.envelopeId) {
@@ -590,10 +740,16 @@
             status: "completed",
           }),
         });
-        const data = await response.json();
-        if (!response.ok || !data.ok) throw new Error(data.error || "No se pudo simular webhook.");
+        const data = await parseApiResponse(response, "No se pudo simular webhook.");
         setSigningStatus(data.status || "signed");
+        setProgress("signed", true);
         updateSigningMeta({ webhook_event_id: data.event_id || eventId });
+        showSuccess("Webhook procesado. Estado final firmado.");
+        updateValueCard(
+          "Cierre contractual trazable",
+          `event_id: ${data.event_id || eventId} · estado final: ${data.status || "signed"}`,
+          "Evidencia auditada de cierre legal en timeline."
+        );
         await refreshSigningTimeline();
       } catch (err) {
         showError(err.message);
@@ -602,8 +758,10 @@
 
     document.getElementById("refresh-signing-btn").addEventListener("click", async () => {
       clearError();
+      clearSuccess();
       try {
         await refreshSigningTimeline();
+        showSuccess("Timeline actualizada.");
       } catch (err) {
         showError(err.message);
       }
