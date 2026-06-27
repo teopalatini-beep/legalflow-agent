@@ -117,6 +117,36 @@ def main() -> None:
             raise RuntimeError(f"Aprobar matter fallo: {approve.get_json()}")
         print("OK: matter aprobado")
 
+        dispatch = c.post(
+            "/api/routing/dispatch",
+            json={
+                "matter_id": matter_id,
+                "approved_by": "demo@legalflow.test",
+                "analysis_reviewed": {
+                    "contract_type": "servicios",
+                    "risk_level": "medio",
+                    "key_clauses": ["confidencialidad"],
+                    "summary": "aprobado para despacho",
+                    "recommended_action": "seguir flujo de firma",
+                    "quality_score": 90,
+                    "reviewer_comment": "Aprobado para continuar.",
+                    "risk_items": [],
+                },
+                "routing": {"suggested_destination": "legal_ops"},
+            },
+            headers=headers,
+        )
+        d_data = dispatch.get_json()
+        if not d_data.get("ok"):
+            raise RuntimeError(f"Routing dispatch fallo: {d_data}")
+        print("OK: routing dispatch", d_data["dispatch"]["destination"])
+
+        queue = c.get("/api/routing/queue")
+        q_data = queue.get_json()
+        if not q_data.get("ok"):
+            raise RuntimeError(f"Routing queue fallo: {q_data}")
+        print("OK: routing queue", q_data["counts"])
+
         create_envelope = c.post(
             "/api/integrations/esign/create-envelope",
             json={"matter_id": matter_id, "signer_email": "legal@acme.com"},

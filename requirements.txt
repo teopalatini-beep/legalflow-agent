@@ -1,2 +1,4 @@
 cursor-sdk
 flask
+pypdf
+python-docx

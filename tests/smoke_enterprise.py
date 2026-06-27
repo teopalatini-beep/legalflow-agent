@@ -101,6 +101,43 @@ def run() -> None:
         )
         assert_true("matter approve", approve.status_code == 200 and approve.get_json().get("ok"))
 
+        dispatch = c.post(
+            "/api/routing/dispatch",
+            json={
+                "matter_id": matter_id,
+                "approved_by": "teo@example.com",
+                "analysis_reviewed": {
+                    "contract_type": "servicios",
+                    "risk_level": "alto",
+                    "key_clauses": ["confidencialidad", "jurisdiccion"],
+                    "summary": "revision final",
+                    "recommended_action": "enviar a senior",
+                    "quality_score": 88,
+                    "reviewer_comment": "Aprobado con ajustes menores.",
+                    "risk_items": [],
+                },
+                "routing": {"suggested_destination": "senior_reviewer"},
+            },
+            headers={**admin_headers, "X-SSO-Groups": "legal_admin,approver"},
+        )
+        dispatch_data = dispatch.get_json()
+        assert_true(
+            "routing dispatch",
+            dispatch.status_code == 200
+            and dispatch_data.get("ok")
+            and dispatch_data.get("dispatch", {}).get("status") == "Despachado / Enviado",
+        )
+
+        queue = c.get("/api/routing/queue")
+        q_data = queue.get_json()
+        dispatched_ids = {x.get("matter_id") for x in q_data.get("dispatched_history", [])}
+        assert_true(
+            "routing queue",
+            queue.status_code == 200
+            and q_data.get("ok")
+            and matter_id in dispatched_ids,
+        )
+
         obligations = c.get(f"/api/matters/{matter_id}/obligations", headers=viewer_headers)
         assert_true("matter obligations", obligations.status_code == 200 and obligations.get_json().get("ok"))
 

@@ -2,7 +2,13 @@
 __pycache__/
 *.pyc
 venv/
+.venv/
 .claude/
+
+# Fixtures con datos reales / PII — nunca commitear
+emails_extraidos.txt
+*_extraidos.txt
+data/fixtures/
 .vercel
 data/audit.jsonl
 data/metrics.jsonl

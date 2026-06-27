@@ -5,8 +5,9 @@ import os
 import re
 import hashlib
 import hmac
+from io import BytesIO
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, List
 from uuid import uuid4
 
 from flask import Flask, jsonify, render_template, request
@@ -20,8 +21,10 @@ from matters_store import (
     decision_approval,
     find_matter_by_envelope_id,
     get_matter,
+    list_matters,
     register_esign_webhook_event_id,
     request_approvals,
+    save_hitl_dispatch,
     update_esign_tracking,
     update_status,
 )
@@ -49,6 +52,151 @@ def json_payload() -> Dict[str, Any]:
 
 def validar_matter_id(matter_id: str) -> bool:
     return bool(MATTER_ID_PATTERN.match(matter_id))
+
+
+def _extract_txt_content(content: bytes) -> str:
+    try:
+        return content.decode("utf-8")
+    except UnicodeDecodeError:
+        return content.decode("latin-1")
+
+
+def _extract_pdf_content(content: bytes) -> str:
+    try:
+        from pypdf import PdfReader
+    except ImportError as err:  # pragma: no cover
+        raise ErrorWorkflow(
+            "Falta dependencia 'pypdf'. Instala requirements.txt para procesar PDF."
+        ) from err
+    reader = PdfReader(BytesIO(content))
+    pages: List[str] = []
+    for page in reader.pages:
+        pages.append(page.extract_text() or "")
+    return "\n".join(pages)
+
+
+def _extract_docx_content(content: bytes) -> str:
+    try:
+        from docx import Document
+    except ImportError as err:  # pragma: no cover
+        raise ErrorWorkflow(
+            "Falta dependencia 'python-docx'. Instala requirements.txt para procesar DOCX."
+        ) from err
+    doc = Document(BytesIO(content))
+    return "\n".join(p.text for p in doc.paragraphs)
+
+
+def _extract_contract_text_from_upload(filename: str, content: bytes) -> str:
+    lower = filename.lower().strip()
+    if lower.endswith(".pdf"):
+        return _extract_pdf_content(content)
+    if lower.endswith(".docx"):
+        return _extract_docx_content(content)
+    if lower.endswith(".txt"):
+        return _extract_txt_content(content)
+    raise ErrorWorkflow(
+        "Formato no soportado. Sube PDF, DOCX o TXT."
+    )
+
+
+def _extract_parties(contract_text: str) -> List[str]:
+    lines = [x.strip() for x in contract_text.splitlines() if x.strip()]
+    if not lines:
+        return []
+    text = " ".join(lines[:8])
+    patterns = [
+        r"entre\s+(.+?)\s+y\s+(.+?)(?:\.|,|;|\n)",
+        r"between\s+(.+?)\s+and\s+(.+?)(?:\.|,|;|\n)",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            left = re.sub(r"\s+", " ", match.group(1)).strip(" :")
+            right = re.sub(r"\s+", " ", match.group(2)).strip(" :")
+            parties = [left, right]
+            return [p for p in parties if p]
+    return []
+
+
+def _risk_level_from_items(risks: List[Dict[str, Any]]) -> str:
+    rank = {"bajo": 1, "low": 1, "medio": 2, "medium": 2, "alto": 3, "high": 3}
+    max_rank = 0
+    max_label = "bajo"
+    for item in risks:
+        label = str(item.get("nivel", "")).strip().lower()
+        level = rank.get(label, 1)
+        if level > max_rank:
+            max_rank = level
+            max_label = label or "bajo"
+    return max_label
+
+
+def _compact_analysis_response(result: Dict[str, Any], contract_text: str) -> Dict[str, Any]:
+    risks = result.get("riesgos_detectados", []) or []
+    return {
+        "run_id": result.get("run_id"),
+        "contract_type": result.get("tipo_contrato_probable", "desconocido"),
+        "parties_involved": _extract_parties(contract_text),
+        "risk_level": _risk_level_from_items(risks),
+        "key_clauses": result.get("clausulas_detectadas", []) or [],
+        "risk_items": risks,
+        "summary": result.get("resumen_final", ""),
+        "recommended_action": result.get("accion_recomendada", ""),
+        "quality_score": result.get("quality_score", 0),
+    }
+
+
+def _routing_destination_from_risk(
+    suggested_destination: str, analysis_reviewed: Dict[str, Any]
+) -> str:
+    clean = str(suggested_destination or "").strip()
+    if clean:
+        return clean
+    risk_level = str(analysis_reviewed.get("risk_level", "")).strip().lower()
+    if risk_level in {"alto", "high"}:
+        return "senior_reviewer"
+    if risk_level in {"medio", "medium"}:
+        return "legal_ops"
+    return "client_renegotiation"
+
+
+def _matter_queue_item(matter: Dict[str, Any]) -> Dict[str, Any]:
+    analysis = matter.get("analysis_result", {})
+    hitl = matter.get("hitl", {})
+    reviewed = hitl.get("analysis_reviewed", {}) if isinstance(hitl, dict) else {}
+    risk_level = (
+        reviewed.get("risk_level")
+        or analysis.get("risk_level")
+        or analysis.get("nivel_riesgo")
+        or "unknown"
+    )
+    contract_type = (
+        reviewed.get("contract_type")
+        or analysis.get("contract_type")
+        or analysis.get("tipo_contrato_probable")
+        or "desconocido"
+    )
+    routing = matter.get("routing", {}) if isinstance(matter.get("routing", {}), dict) else {}
+    return {
+        "matter_id": matter.get("matter_id"),
+        "title": matter.get("title", "Untitled Matter"),
+        "cliente_id": matter.get("cliente_id", "default"),
+        "status": matter.get("status", "draft"),
+        "contract_type": contract_type,
+        "risk_level": str(risk_level),
+        "destination": routing.get("destination"),
+        "routing_status": routing.get("status"),
+        "updated_at": matter.get("updated_at"),
+        "created_at": matter.get("created_at"),
+    }
+
+
+def _is_dispatched_matter(matter: Dict[str, Any]) -> bool:
+    routing = matter.get("routing", {})
+    if isinstance(routing, dict) and routing.get("status") == "dispatched":
+        return True
+    status = str(matter.get("status", "")).strip().lower()
+    return status in {"despachado / enviado", "despachado", "enviado"}
 
 
 def _normalize_esign_status(raw_status: str) -> str | None:
@@ -240,6 +388,97 @@ def analizar_contrato() -> Any:
         {"cliente_id": cliente_id, "modo": modo, "duration_ms": duration_ms},
     )
     return jsonify(response)
+
+
+@app.post("/api/analyze-contract")
+def analyze_contract_upload() -> Any:
+    ensure_data_dirs()
+    retention_cleanup(retention_days=30)
+
+    uploaded = request.files.get("file")
+    if not uploaded or not uploaded.filename:
+        return error_response("Falta archivo en campo 'file'.", 400, "missing_file")
+
+    mode = request.form.get("mode", "local")
+    model = request.form.get("model", "composer-2.5")
+    client_id = request.form.get("client_id", "default")
+    analysis_mode = request.form.get("analysis_mode", "general")
+
+    if mode not in {"local", "sdk"}:
+        return error_response("Mode invalido.", 400, "invalid_mode")
+
+    content = uploaded.read()
+    if not content:
+        return error_response("Archivo vacio.", 400, "empty_file")
+
+    try:
+        contract_text = limpiar_texto_subido(
+            _extract_contract_text_from_upload(uploaded.filename, content)
+        )
+    except ErrorWorkflow as err:
+        return error_response(str(err), 400, "unsupported_file")
+    except UnicodeDecodeError:
+        return error_response(
+            "No pude leer el archivo. Verifica encoding/contenido.",
+            400,
+            "invalid_file_encoding",
+        )
+    except Exception as err:  # pragma: no cover
+        return error_response(
+            f"Error leyendo archivo: {err}", 500, "file_read_error"
+        )
+
+    if not contract_text:
+        return error_response("No se extrajo texto del archivo.", 400, "empty_extraction")
+
+    start = datetime.now(timezone.utc)
+    try:
+        result: Dict[str, Any] = ejecutar_workflow(
+            contract_text,
+            mode,
+            model,
+            verbose=False,
+            cliente_id=client_id,
+            modo_analisis=analysis_mode,
+        )
+    except ErrorWorkflow as err:
+        audit_log("analyze_contract_error", {"client_id": client_id, "error": str(err)})
+        return error_response(str(err), 400, "workflow_error")
+    except Exception as err:  # pragma: no cover
+        audit_log("analyze_contract_exception", {"client_id": client_id, "error": str(err)})
+        return error_response(
+            f"Error inesperado: {err}", 500, "internal_exception"
+        )
+
+    duration_ms = int((datetime.now(timezone.utc) - start).total_seconds() * 1000)
+    compact = _compact_analysis_response(result, contract_text)
+    metric_log(
+        "analyze_contract_duration_ms",
+        duration_ms,
+        {"mode": mode, "client_id": client_id, "filename": uploaded.filename},
+    )
+    audit_log(
+        "analyze_contract_completed",
+        {
+            "client_id": client_id,
+            "mode": mode,
+            "filename": uploaded.filename,
+            "duration_ms": duration_ms,
+            "run_id": compact.get("run_id"),
+        },
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "analysis": compact,
+            "metadata": {
+                "filename": uploaded.filename,
+                "mode": mode,
+                "analysis_mode": analysis_mode,
+                "duration_ms": duration_ms,
+            },
+        }
+    )
 
 
 @app.post("/api/casos")
@@ -508,6 +747,101 @@ def matter_timeline(matter_id: str) -> Any:
             "events": matter.get("events", []),
             "approvals": matter.get("approvals", []),
             "document_versions": matter.get("document_versions", []),
+        }
+    )
+
+
+@app.post("/api/routing/dispatch")
+@require_sso(required_groups=["legal_admin", "legal_ops", "approver"])
+def dispatch_routing() -> Any:
+    payload = json_payload()
+    matter_id = str(payload.get("matter_id", "")).strip()
+    if not matter_id:
+        return error_response("Falta matter_id.", 400, "missing_matter_id")
+    if not validar_matter_id(matter_id):
+        return error_response("matter_id invalido.", 400, "invalid_matter_id")
+    matter = get_matter(matter_id)
+    if not matter:
+        return error_response("Matter no encontrado.", 404, "matter_not_found")
+
+    analysis_reviewed = payload.get("analysis_reviewed")
+    if not isinstance(analysis_reviewed, dict):
+        return error_response(
+            "analysis_reviewed debe ser un objeto.", 400, "invalid_analysis_reviewed"
+        )
+    routing = payload.get("routing", {})
+    if routing and not isinstance(routing, dict):
+        return error_response("routing debe ser un objeto.", 400, "invalid_routing")
+    approved_at = str(payload.get("approved_at") or datetime.now(timezone.utc).isoformat())
+    approved_by = str(payload.get("approved_by") or sso_context(request)["email"])
+    destination = _routing_destination_from_risk(
+        str((routing or {}).get("suggested_destination", "")),
+        analysis_reviewed,
+    )
+
+    updated = save_hitl_dispatch(
+        matter_id,
+        approved_by=approved_by,
+        approved_at=approved_at,
+        analysis_reviewed=analysis_reviewed,
+        destination=destination,
+        routing_status="dispatched",
+    )
+    append_event(
+        matter_id,
+        "routing_dispatched",
+        {
+            "by": sso_context(request)["email"],
+            "approved_by": approved_by,
+            "approved_at": approved_at,
+            "destination": destination,
+            "status": "Despachado / Enviado",
+        },
+    )
+    audit_log(
+        "routing_dispatched",
+        {
+            "matter_id": matter_id,
+            "approved_by": approved_by,
+            "destination": destination,
+        },
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "dispatch": {
+                "matter_id": matter_id,
+                "destination": destination,
+                "approved_by": approved_by,
+                "approved_at": approved_at,
+                "status": updated.get("status"),
+            },
+            "matter": updated,
+        }
+    )
+
+
+@app.get("/api/routing/queue")
+def routing_queue() -> Any:
+    items = list_matters(limit=500)
+    pending: List[Dict[str, Any]] = []
+    dispatched: List[Dict[str, Any]] = []
+    for matter in items:
+        item = _matter_queue_item(matter)
+        if _is_dispatched_matter(matter):
+            dispatched.append(item)
+        else:
+            pending.append(item)
+    return jsonify(
+        {
+            "ok": True,
+            "pending_review": pending,
+            "dispatched_history": dispatched,
+            "counts": {
+                "pending_review": len(pending),
+                "dispatched_history": len(dispatched),
+                "total": len(items),
+            },
         }
     )
 

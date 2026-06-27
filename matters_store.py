@@ -48,6 +48,25 @@ def get_matter(matter_id: str) -> Dict[str, Any] | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def list_matters(limit: int = 200) -> list[Dict[str, Any]]:
+    _ensure_dir()
+    items: list[Dict[str, Any]] = []
+    for path in MATTERS_DIR.glob("*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            continue
+        if "matter_id" not in data:
+            data["matter_id"] = path.stem
+        items.append(data)
+
+    def _sort_key(item: Dict[str, Any]) -> str:
+        return str(item.get("updated_at") or item.get("created_at") or "")
+
+    items.sort(key=_sort_key, reverse=True)
+    return items[:limit]
+
+
 def append_event(matter_id: str, event_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     matter = get_matter(matter_id)
     if not matter:
@@ -78,6 +97,34 @@ def update_esign_tracking(matter_id: str, tracking: Dict[str, Any]) -> Dict[str,
         raise FileNotFoundError(f"Matter '{matter_id}' no existe.")
     esign = matter.setdefault("esign", {})
     esign.update(tracking)
+    matter["updated_at"] = datetime.now(timezone.utc).isoformat()
+    save_matter(matter_id, matter)
+    return matter
+
+
+def save_hitl_dispatch(
+    matter_id: str,
+    *,
+    approved_by: str,
+    approved_at: str,
+    analysis_reviewed: Dict[str, Any],
+    destination: str,
+    routing_status: str = "dispatched",
+) -> Dict[str, Any]:
+    matter = get_matter(matter_id)
+    if not matter:
+        raise FileNotFoundError(f"Matter '{matter_id}' no existe.")
+    matter["hitl"] = {
+        "approved_by": approved_by,
+        "approved_at": approved_at,
+        "analysis_reviewed": analysis_reviewed,
+    }
+    matter["routing"] = {
+        "destination": destination,
+        "status": routing_status,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    matter["status"] = "Despachado / Enviado"
     matter["updated_at"] = datetime.now(timezone.utc).isoformat()
     save_matter(matter_id, matter)
     return matter
