@@ -156,6 +156,9 @@ def _compact_analysis_response(result: Dict[str, Any], contract_text: str) -> Di
         "summary": result.get("resumen_final", ""),
         "recommended_action": result.get("accion_recomendada", ""),
         "quality_score": result.get("quality_score", 0),
+        "engine": result.get("engine", "desconocido"),
+        "is_demo": result.get("is_demo", True),
+        "demo_fallback": result.get("demo_fallback"),
     }
 
 
@@ -366,7 +369,7 @@ def analizar_contrato() -> Any:
     contrato_texto = request.form.get("contrato", "")
     contrato_b = request.form.get("contrato_b", "")
     modo = request.form.get("modo", "local")
-    modelo = request.form.get("modelo", "composer-2.5")
+    modelo = request.form.get("modelo", "claude-sonnet-4-6")
     cliente_id = request.form.get("cliente_id", "default")
     modo_analisis = request.form.get("modo_analisis", "general")
     compare = request.form.get("compare", "false").lower() == "true"
@@ -450,7 +453,7 @@ def analyze_contract_upload() -> Any:
         return error_response("Falta archivo en campo 'file'.", 400, "missing_file")
 
     mode = request.form.get("mode", "local")
-    model = request.form.get("model", "composer-2.5")
+    model = request.form.get("model", "claude-sonnet-4-6")
     client_id = request.form.get("client_id", "default")
     analysis_mode = request.form.get("analysis_mode", "general")
 

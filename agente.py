@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -13,12 +11,12 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List
 from uuid import uuid4
 
-try:
-    from cursor_sdk import Agent, AgentOptions, CursorAgentError, LocalAgentOptions
-
-    CURSOR_SDK_DISPONIBLE = True
-except ImportError:
-    CURSOR_SDK_DISPONIBLE = False
+from llm_provider import (
+    DEFAULT_CLAUDE_MODEL,
+    LLMError,
+    LLMProvider,
+    get_provider,
+)
 
 
 Contexto = Dict[str, Any]
@@ -57,17 +55,30 @@ class ErrorWorkflow(RuntimeError):
     """Error de negocio del pipeline."""
 
 
-def modelo_efectivo(model: str) -> str:
-    return "composer-2.5" if model.strip().lower() == "auto" else model
+ENGINE_DEMO = "demo-keywords"
 
 
-def modelos_fallback(modelo_solicitado: str) -> List[str]:
-    base = [modelo_efectivo(modelo_solicitado), "composer-2.5", "gpt-5.5"]
-    salida: List[str] = []
-    for item in base:
-        if item not in salida:
-            salida.append(item)
-    return salida
+def resolver_engine(modo: str, model: str) -> tuple[str, LLMProvider | None]:
+    """Decide con qué motor corre el pipeline.
+
+    - modo "sdk": intenta usar Claude. Si no hay ANTHROPIC_API_KEY configurada,
+      cae al modo demo (keywords) marcándolo explícitamente.
+    - modo "local": modo demo a propósito.
+
+    Devuelve (nombre_engine, provider). provider es None en modo demo.
+    """
+    if modo == "sdk":
+        provider = get_provider(prefer="claude", default_model=DEFAULT_CLAUDE_MODEL)
+        if provider is not None:
+            resolved = provider.resolve_model(model)
+            return f"claude:{resolved}", provider
+        # Pedido SDK pero sin API key -> fallback demo, claramente marcado.
+        return ENGINE_DEMO, None
+    return ENGINE_DEMO, None
+
+
+def es_engine_claude(engine: str) -> bool:
+    return engine.startswith("claude:")
 
 
 def asegurar_directorios() -> None:
@@ -87,16 +98,6 @@ def cargar_playbook(cliente_id: str) -> Dict[str, Any]:
         raise ErrorWorkflow(f"Playbook invalido para cliente '{cliente_id}'.")
 
 
-def extraer_json(texto: str) -> Dict[str, Any]:
-    try:
-        return json.loads(texto)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", texto, flags=re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-        raise ErrorWorkflow("El agente no devolvio JSON valido.")
-
-
 def validar_schema(salida: Dict[str, Any], schema: Dict[str, type], paso: str) -> None:
     for key, expected_type in schema.items():
         if key not in salida:
@@ -107,50 +108,24 @@ def validar_schema(salida: Dict[str, Any], schema: Dict[str, type], paso: str) -
             )
 
 
-def invocar_agente_sdk(prompt: str, model: str) -> Dict[str, Any]:
-    if not CURSOR_SDK_DISPONIBLE:
-        raise ErrorWorkflow(
-            "cursor_sdk no esta instalado. Instala con: pip install cursor-sdk"
-        )
-    api_key = os.getenv("CURSOR_API_KEY")
-    if not api_key:
-        raise ErrorWorkflow("Falta CURSOR_API_KEY. Exporta la variable antes de ejecutar.")
-
-    resultado = Agent.prompt(
-        prompt,
-        AgentOptions(
-            api_key=api_key,
-            model=model,
-            local=LocalAgentOptions(cwd=os.getcwd()),
-        ),
-    )
-    if resultado.status == "error":
-        raise ErrorWorkflow(f"Run con error en SDK. run_id={resultado.id}")
-    return extraer_json(resultado.result)
-
-
 def ejecutar_con_retry(
-    paso: PasoAgente, contexto: Contexto, modo: str, model: str, max_retries: int = 2
+    paso: PasoAgente, contexto: Contexto, engine: str, model: str, max_retries: int = 2
 ) -> Dict[str, Any]:
     errores: List[str] = []
     intentos_totales = 0
-    for candidate_model in modelos_fallback(model):
-        for _ in range(max_retries):
-            intentos_totales += 1
-            try:
-                salida = paso.accion(contexto, candidate_model if modo == "sdk" else model)
-                validar_schema(salida, paso.schema, paso.nombre)
-                salida["_meta"] = {
-                    "attempts": intentos_totales,
-                    "model_used": candidate_model if modo == "sdk" else "local-heuristic",
-                }
-                return salida
-            except (ErrorWorkflow, CursorAgentError) as err:
-                errores.append(str(err))
-            except Exception as err:
-                errores.append(f"Error inesperado: {err}")
+    for _ in range(max_retries):
+        intentos_totales += 1
+        try:
+            salida = paso.accion(contexto, model)
+            validar_schema(salida, paso.schema, paso.nombre)
+            salida["_meta"] = {"attempts": intentos_totales, "engine": engine}
+            return salida
+        except (ErrorWorkflow, LLMError) as err:
+            errores.append(str(err))
+        except Exception as err:
+            errores.append(f"Error inesperado: {err}")
     raise ErrorWorkflow(
-        f"No se pudo completar '{paso.nombre}' luego de reintentos/fallback. "
+        f"No se pudo completar '{paso.nombre}' luego de {intentos_totales} intentos. "
         f"Ultimo error: {errores[-1] if errores else 'desconocido'}"
     )
 
@@ -168,107 +143,152 @@ def construir_prompt_base(contexto: Contexto) -> str:
     )
 
 
-def agente_ingesta_sdk(contexto: Contexto, model: str) -> Contexto:
-    prompt = f"""
-{construir_prompt_base(contexto)}
-Eres un analista legal. Limpia y normaliza este contrato.
-Devuelve SOLO JSON valido:
-{{
-  "texto_limpio": "string",
-  "cantidad_palabras": 0,
-  "tipo_contrato_probable": "string"
-}}
-Contrato:
-{contexto["contrato"]}
-"""
-    return invocar_agente_sdk(prompt, model)
+# ── System prompts por paso (uno por agente, no uno gigante) ──────────────────
+
+SYS_INGESTA = (
+    "Sos un analista legal argentino. Recibís el texto de un contrato y lo "
+    "clasificás. Trabajás bajo derecho argentino (CCyC). Respondés SIEMPRE con "
+    "un único objeto JSON, sin texto adicional ni markdown."
+)
+
+SYS_EXTRACCION = (
+    "Sos un abogado argentino experto en extracción de cláusulas. Identificás qué "
+    "cláusulas contiene el contrato y las obligaciones principales de las partes. "
+    "Para cada cláusula detectada citás un fragmento LITERAL del texto como "
+    "evidencia (no parafrasees la evidencia). Respondés SIEMPRE con un único "
+    "objeto JSON, sin texto adicional ni markdown."
+)
+
+SYS_RIESGOS = (
+    "Sos un abogado argentino especializado en riesgo contractual. Evaluás el "
+    "contenido real de las cláusulas (no sólo su presencia) bajo derecho argentino: "
+    "jurisdicción y ley aplicable, multas/cláusula penal y su proporcionalidad, "
+    "intimación previa, asimetrías de rescisión, plazos de preaviso, cesión de "
+    "propiedad intelectual, límites de responsabilidad, confidencialidad. "
+    "El campo 'confianza' debe ser un número 0.0-1.0 que refleje HONESTAMENTE qué "
+    "tan claro es el riesgo según la evidencia textual: alto (>0.8) sólo si el texto "
+    "lo dice explícitamente; bajo (<0.5) si es una inferencia o el texto es ambiguo. "
+    "No inventes un valor fijo. Respondés SIEMPRE con un único objeto JSON, sin "
+    "texto adicional ni markdown."
+)
+
+SYS_REDLINE = (
+    "Sos un abogado argentino que redacta redlines. Para cada riesgo proponés una "
+    "redacción concreta y lista para pegar que mitigue el problema bajo derecho "
+    "argentino. Respondés SIEMPRE con un único objeto JSON, sin texto adicional ni "
+    "markdown."
+)
+
+SYS_RESUMEN = (
+    "Sos un abogado argentino que resume para un decisor no técnico. Tono ejecutivo, "
+    "claro y accionable. Respondés SIEMPRE con un único objeto JSON, sin texto "
+    "adicional ni markdown."
+)
+
+SYS_VERIFIER = (
+    "Sos QA legal. Verificás consistencia entre cláusulas, riesgos y redlines: que "
+    "cada riesgo se apoye en una cláusula real, que los riesgos altos tengan redline, "
+    "y que no haya contradicciones. quality_score es un entero 0-100. Respondés "
+    "SIEMPRE con un único objeto JSON, sin texto adicional ni markdown."
+)
 
 
-def agente_extraccion_sdk(contexto: Contexto, model: str) -> Contexto:
-    prompt = f"""
-{construir_prompt_base(contexto)}
-Eres un extractor de clausulas.
-Devuelve SOLO JSON valido:
-{{
-  "clausulas_detectadas": ["string"],
-  "obligaciones_principales": ["string"],
-  "clausula_evidencias": {{"nombre_clausula": "fragmento_de_texto"}}
-}}
-Texto:
-{contexto["texto_limpio"]}
-"""
-    return invocar_agente_sdk(prompt, model)
+def _provider(contexto: Contexto) -> LLMProvider:
+    provider = contexto.get("_provider")
+    if provider is None:
+        raise ErrorWorkflow("No hay proveedor LLM configurado para el paso Claude.")
+    return provider
 
 
-def agente_riesgos_sdk(contexto: Contexto, model: str) -> Contexto:
-    prompt = f"""
-{construir_prompt_base(contexto)}
-Eres un abogado de riesgos contractuales.
-Devuelve SOLO JSON valido:
-{{
-  "riesgos_detectados": [
-    {{
-      "riesgo": "string",
-      "nivel": "bajo|medio|alto",
-      "recomendacion": "string",
-      "confianza": 0.0,
-      "clausula_relacionada": "string"
-    }}
-  ]
-}}
-Clausulas: {json.dumps(contexto["clausulas_detectadas"], ensure_ascii=True)}
-Obligaciones: {json.dumps(contexto["obligaciones_principales"], ensure_ascii=True)}
-"""
-    return invocar_agente_sdk(prompt, model)
+def agente_ingesta_claude(contexto: Contexto, model: str) -> Contexto:
+    # texto_limpio y conteo son determinísticos: no gastamos tokens en eso.
+    texto_limpio = " ".join(contexto["contrato"].split())
+    user = (
+        f"{construir_prompt_base(contexto)}\n"
+        "Clasificá el tipo de contrato. Devolvé JSON con esta forma exacta:\n"
+        '{"tipo_contrato_probable": "string (p. ej. prestación de servicios, NDA, '
+        'compraventa, licencia, locación, etc.)"}\n\n'
+        f"Contrato:\n{texto_limpio}"
+    )
+    out = _provider(contexto).complete_json(
+        system=SYS_INGESTA, user=user, model=model, max_tokens=200
+    )
+    return {
+        "texto_limpio": texto_limpio,
+        "cantidad_palabras": len(texto_limpio.split()),
+        "tipo_contrato_probable": str(out.get("tipo_contrato_probable", "desconocido")),
+    }
 
 
-def agente_redline_sdk(contexto: Contexto, model: str) -> Contexto:
-    prompt = f"""
-{construir_prompt_base(contexto)}
-Genera redlines sugeridos.
-Devuelve SOLO JSON valido:
-{{
-  "redlines_sugeridos": [
-    {{
-      "clausula": "string",
-      "texto_sugerido": "string",
-      "motivo": "string"
-    }}
-  ]
-}}
-Riesgos: {json.dumps(contexto["riesgos_detectados"], ensure_ascii=True)}
-"""
-    return invocar_agente_sdk(prompt, model)
+def agente_extraccion_claude(contexto: Contexto, model: str) -> Contexto:
+    user = (
+        f"{construir_prompt_base(contexto)}\n"
+        "Devolvé JSON con esta forma exacta:\n"
+        '{"clausulas_detectadas": ["string"], '
+        '"obligaciones_principales": ["string"], '
+        '"clausula_evidencias": {"nombre_clausula": "fragmento LITERAL del texto"}}\n\n'
+        f"Texto del contrato:\n{contexto['texto_limpio']}"
+    )
+    return _provider(contexto).complete_json(
+        system=SYS_EXTRACCION, user=user, model=model, max_tokens=1500
+    )
 
 
-def agente_resumen_sdk(contexto: Contexto, model: str) -> Contexto:
-    prompt = f"""
-{construir_prompt_base(contexto)}
-Resume el analisis en tono ejecutivo.
-Devuelve SOLO JSON valido:
-{{
-  "resumen_final": "string",
-  "accion_recomendada": "string"
-}}
-Riesgos: {json.dumps(contexto["riesgos_detectados"], ensure_ascii=True)}
-Redlines: {json.dumps(contexto["redlines_sugeridos"], ensure_ascii=True)}
-"""
-    return invocar_agente_sdk(prompt, model)
+def agente_riesgos_claude(contexto: Contexto, model: str) -> Contexto:
+    user = (
+        f"{construir_prompt_base(contexto)}\n"
+        "Analizá el contenido del contrato y devolvé JSON con esta forma exacta:\n"
+        '{"riesgos_detectados": [{"riesgo": "string", '
+        '"nivel": "bajo|medio|alto", "recomendacion": "string", '
+        '"confianza": 0.0, "clausula_relacionada": "string", '
+        '"evidencia": "fragmento LITERAL del texto que sustenta el riesgo"}]}\n\n'
+        f"Cláusulas detectadas: {json.dumps(contexto['clausulas_detectadas'], ensure_ascii=True)}\n"
+        f"Obligaciones: {json.dumps(contexto['obligaciones_principales'], ensure_ascii=True)}\n\n"
+        f"Texto del contrato:\n{contexto['texto_limpio']}"
+    )
+    return _provider(contexto).complete_json(
+        system=SYS_RIESGOS, user=user, model=model, max_tokens=2500
+    )
 
 
-def agente_verifier_sdk(contexto: Contexto, model: str) -> Contexto:
-    prompt = f"""
-Eres QA legal. Verifica consistencia entre clausulas, riesgos y redlines.
-Devuelve SOLO JSON valido:
-{{
-  "quality_warnings": ["string"],
-  "quality_score": 0
-}}
-Clausulas: {json.dumps(contexto["clausulas_detectadas"], ensure_ascii=True)}
-Riesgos: {json.dumps(contexto["riesgos_detectados"], ensure_ascii=True)}
-Redlines: {json.dumps(contexto["redlines_sugeridos"], ensure_ascii=True)}
-"""
-    return invocar_agente_sdk(prompt, model)
+def agente_redline_claude(contexto: Contexto, model: str) -> Contexto:
+    user = (
+        f"{construir_prompt_base(contexto)}\n"
+        "Devolvé JSON con esta forma exacta:\n"
+        '{"redlines_sugeridos": [{"clausula": "string", '
+        '"texto_sugerido": "string", "motivo": "string"}]}\n\n'
+        f"Riesgos: {json.dumps(contexto['riesgos_detectados'], ensure_ascii=True)}"
+    )
+    return _provider(contexto).complete_json(
+        system=SYS_REDLINE, user=user, model=model, max_tokens=2000
+    )
+
+
+def agente_resumen_claude(contexto: Contexto, model: str) -> Contexto:
+    user = (
+        f"{construir_prompt_base(contexto)}\n"
+        "Devolvé JSON con esta forma exacta:\n"
+        '{"resumen_final": "string", "accion_recomendada": "string"}\n\n'
+        f"Tipo: {contexto.get('tipo_contrato_probable', 'desconocido')}\n"
+        f"Riesgos: {json.dumps(contexto['riesgos_detectados'], ensure_ascii=True)}\n"
+        f"Redlines: {json.dumps(contexto['redlines_sugeridos'], ensure_ascii=True)}"
+    )
+    return _provider(contexto).complete_json(
+        system=SYS_RESUMEN, user=user, model=model, max_tokens=800
+    )
+
+
+def agente_verifier_claude(contexto: Contexto, model: str) -> Contexto:
+    user = (
+        "Devolvé JSON con esta forma exacta:\n"
+        '{"quality_warnings": ["string"], "quality_score": 0}\n\n'
+        f"Cláusulas: {json.dumps(contexto['clausulas_detectadas'], ensure_ascii=True)}\n"
+        f"Riesgos: {json.dumps(contexto['riesgos_detectados'], ensure_ascii=True)}\n"
+        f"Redlines: {json.dumps(contexto['redlines_sugeridos'], ensure_ascii=True)}"
+    )
+    return _provider(contexto).complete_json(
+        system=SYS_VERIFIER, user=user, model=model, max_tokens=600
+    )
 
 
 def agente_ingesta_local(contexto: Contexto, _: str) -> Contexto:
@@ -307,35 +327,38 @@ def agente_extraccion_local(contexto: Contexto, _: str) -> Contexto:
 
 
 def agente_riesgos_local(contexto: Contexto, _: str) -> Contexto:
+    # MODO DEMO: heurística por keywords, NO es análisis legal.
+    # 'confianza' es None a propósito: una coincidencia de keyword no permite
+    # estimar honestamente una confianza numérica (antes había 0.76 inventado).
     riesgos = []
     clausulas = ",".join(contexto["clausulas_detectadas"]).lower()
     if "penalidad" in clausulas:
         riesgos.append(
             {
-                "riesgo": "Clausula penal potencialmente onerosa",
+                "riesgo": "[DEMO] Se menciona una multa/penalidad (keyword)",
                 "nivel": "medio",
-                "recomendacion": "Negociar tope de penalidad y supuestos de aplicacion",
-                "confianza": 0.76,
+                "recomendacion": "Revisar tope y supuestos de aplicacion con un abogado",
+                "confianza": None,
                 "clausula_relacionada": "penalidad",
             }
         )
     if "jurisdiccion" in clausulas:
         riesgos.append(
             {
-                "riesgo": "Jurisdiccion posiblemente desfavorable",
+                "riesgo": "[DEMO] Se menciona jurisdiccion (keyword)",
                 "nivel": "medio",
-                "recomendacion": "Alinear tribunal con domicilio o sede operativa",
-                "confianza": 0.73,
+                "recomendacion": "Verificar tribunal y ley aplicable con un abogado",
+                "confianza": None,
                 "clausula_relacionada": "jurisdiccion",
             }
         )
     if not riesgos:
         riesgos.append(
             {
-                "riesgo": "Sin riesgos evidentes por heuristica",
+                "riesgo": "[DEMO] Sin coincidencias de keywords (no implica ausencia de riesgo)",
                 "nivel": "bajo",
                 "recomendacion": "Hacer revision legal completa",
-                "confianza": 0.45,
+                "confianza": None,
                 "clausula_relacionada": "general",
             }
         )
@@ -357,6 +380,8 @@ def agente_redline_local(contexto: Contexto, _: str) -> Contexto:
 
 def agente_resumen_local(contexto: Contexto, _: str) -> Contexto:
     resumen = (
+        "[MODO DEMO — heurística de keywords, NO es un análisis legal real. "
+        "Configurá ANTHROPIC_API_KEY para análisis con Claude.]\n"
         f"Tipo probable: {contexto['tipo_contrato_probable']}\n"
         f"Palabras: {contexto['cantidad_palabras']}\n"
         f"Clausulas: {', '.join(contexto['clausulas_detectadas'])}\n"
@@ -365,7 +390,7 @@ def agente_resumen_local(contexto: Contexto, _: str) -> Contexto:
     )
     return {
         "resumen_final": resumen,
-        "accion_recomendada": "Revisar puntos de riesgo con asesor legal antes de firmar.",
+        "accion_recomendada": "MODO DEMO: no usar para decisiones. Conectar Claude y revisar con un abogado.",
     }
 
 
@@ -380,43 +405,43 @@ def agente_verifier_local(contexto: Contexto, _: str) -> Contexto:
     return {"quality_warnings": warnings, "quality_score": max(0, 100 - len(warnings) * 20)}
 
 
-def construir_flujo(modo: str) -> List[PasoAgente]:
-    use_sdk = modo == "sdk"
+def construir_flujo(engine: str) -> List[PasoAgente]:
+    usar_claude = es_engine_claude(engine)
     return [
         PasoAgente(
             "Ingesta",
             "ExtractorAgent",
-            agente_ingesta_sdk if use_sdk else agente_ingesta_local,
+            agente_ingesta_claude if usar_claude else agente_ingesta_local,
             {"texto_limpio": str, "cantidad_palabras": int, "tipo_contrato_probable": str},
         ),
         PasoAgente(
             "Extraccion de clausulas",
             "ExtractorAgent",
-            agente_extraccion_sdk if use_sdk else agente_extraccion_local,
+            agente_extraccion_claude if usar_claude else agente_extraccion_local,
             {"clausulas_detectadas": list, "obligaciones_principales": list, "clausula_evidencias": dict},
         ),
         PasoAgente(
             "Analisis de riesgos",
             "RiskAgent",
-            agente_riesgos_sdk if use_sdk else agente_riesgos_local,
+            agente_riesgos_claude if usar_claude else agente_riesgos_local,
             {"riesgos_detectados": list},
         ),
         PasoAgente(
             "Redline sugerido",
             "RedlineAgent",
-            agente_redline_sdk if use_sdk else agente_redline_local,
+            agente_redline_claude if usar_claude else agente_redline_local,
             {"redlines_sugeridos": list},
         ),
         PasoAgente(
             "Resumen final",
             "SummaryAgent",
-            agente_resumen_sdk if use_sdk else agente_resumen_local,
+            agente_resumen_claude if usar_claude else agente_resumen_local,
             {"resumen_final": str, "accion_recomendada": str},
         ),
         PasoAgente(
             "Verificacion de calidad",
             "VerifierAgent",
-            agente_verifier_sdk if use_sdk else agente_verifier_local,
+            agente_verifier_claude if usar_claude else agente_verifier_local,
             {"quality_warnings": list, "quality_score": int},
         ),
     ]
@@ -453,6 +478,8 @@ def ejecutar_workflow(
     cliente_id: str = "default",
     modo_analisis: str = "general",
 ) -> Contexto:
+    engine, provider = resolver_engine(modo, model)
+    is_demo = not es_engine_claude(engine)
     contexto: Contexto = {
         "run_id": str(uuid4()),
         "contrato": contrato,
@@ -460,22 +487,31 @@ def ejecutar_workflow(
         "modo_analisis": modo_analisis,
         "playbook": cargar_playbook(cliente_id),
         "orchestrator_trace": [],
+        "engine": engine,
+        "is_demo": is_demo,
+        "_provider": provider,
     }
-    flujo = construir_flujo(modo)
+    # Aviso explícito si pidieron SDK pero no hay API key (cayó a demo).
+    if modo == "sdk" and is_demo:
+        contexto["demo_fallback"] = (
+            "Se pidió análisis con Claude pero falta ANTHROPIC_API_KEY; "
+            "se corrió en MODO DEMO (keywords). No usar para decisiones."
+        )
+    flujo = construir_flujo(engine)
 
     if verbose:
         print("\n=== LEGALFLOW ORCHESTRATOR ===")
         print(f"Run: {contexto['run_id']}")
-        print(f"Modo: {modo}")
+        print(f"Engine: {engine}{'  (MODO DEMO)' if is_demo else ''}")
         print(f"Cliente: {cliente_id}")
-        if modo == "sdk":
-            print(f"Modelo inicial: {model}")
+        if contexto.get("demo_fallback"):
+            print(f"[AVISO] {contexto['demo_fallback']}")
 
     for paso in flujo:
         if verbose:
             print(f"\n[Ejecutando] {paso.rol} -> {paso.nombre}")
         inicio = time.time()
-        salida = ejecutar_con_retry(paso, contexto, modo, model)
+        salida = ejecutar_con_retry(paso, contexto, engine, model)
         meta = salida.pop("_meta", {})
         contexto.update(salida)
         contexto["orchestrator_trace"].append(
@@ -484,16 +520,19 @@ def ejecutar_workflow(
                 "rol": paso.rol,
                 "duration_ms": int((time.time() - inicio) * 1000),
                 "attempts": meta.get("attempts", 1),
-                "model_used": meta.get("model_used", "local-heuristic"),
+                "engine": meta.get("engine", engine),
             }
         )
         if verbose:
             print(f"[OK] {paso.nombre}: {json.dumps(salida, ensure_ascii=True)}")
 
+    contexto.pop("_provider", None)  # no serializar el cliente LLM
     contexto["metrics"] = {
         "pasos": len(flujo),
         "total_duration_ms": sum(x["duration_ms"] for x in contexto["orchestrator_trace"]),
         "quality_score": contexto.get("quality_score", 0),
+        "engine": engine,
+        "is_demo": is_demo,
     }
     registrar_memoria(contexto)
     guardar_run(contexto)

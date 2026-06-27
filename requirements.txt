@@ -1,4 +1,4 @@
-cursor-sdk
+anthropic
 flask
 pypdf
 python-docx
