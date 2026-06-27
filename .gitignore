@@ -9,6 +9,12 @@ venv/
 emails_extraidos.txt
 *_extraidos.txt
 data/fixtures/
+
+# Dependencias y artefactos de build del frontend — nunca commitear
+frontend/node_modules/
+frontend/.next/
+node_modules/
+.next/
 .vercel
 data/audit.jsonl
 data/metrics.jsonl
