@@ -41,7 +41,15 @@ def run() -> None:
         os.environ["LEGALFLOW_ENV"] = "production"
         if "LEGALFLOW_SSO_TOKEN" in os.environ:
             del os.environ["LEGALFLOW_SSO_TOKEN"]
-        sso_misconfigured = c.post("/api/matters", json={"title": "x"})
+        sso_misconfigured = c.post(
+            "/api/matters",
+            json={"title": "x"},
+            headers={
+                "X-SSO-User": "teo",
+                "X-SSO-Email": "teo@example.com",
+                "X-SSO-Groups": "legal_admin",
+            },
+        )
         assert_true(
             "sso fail closed in production",
             sso_misconfigured.status_code == 503
