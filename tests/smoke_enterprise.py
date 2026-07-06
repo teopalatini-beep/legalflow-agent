@@ -19,6 +19,7 @@ def assert_true(name: str, condition: bool) -> None:
 
 def run() -> None:
     os.environ["LEGALFLOW_SSO_TOKEN"] = "test-token"
+    os.environ["LEGALFLOW_ENV"] = "development"
     admin_headers = {
         "Authorization": "Bearer test-token",
         "X-SSO-User": "teo",
@@ -33,6 +34,37 @@ def run() -> None:
     }
 
     with app.test_client() as c:
+        original_env = os.environ.get("LEGALFLOW_ENV")
+        original_token = os.environ.get("LEGALFLOW_SSO_TOKEN")
+        original_webhook_secret = os.environ.get("LEGALFLOW_ESIGN_WEBHOOK_SECRET")
+
+        os.environ["LEGALFLOW_ENV"] = "production"
+        if "LEGALFLOW_SSO_TOKEN" in os.environ:
+            del os.environ["LEGALFLOW_SSO_TOKEN"]
+        sso_misconfigured = c.post("/api/matters", json={"title": "x"})
+        assert_true(
+            "sso fail closed in production",
+            sso_misconfigured.status_code == 503
+            and sso_misconfigured.get_json().get("code") == "sso_misconfigured",
+        )
+        os.environ["LEGALFLOW_SSO_TOKEN"] = "test-token"
+
+        if "LEGALFLOW_ESIGN_WEBHOOK_SECRET" in os.environ:
+            del os.environ["LEGALFLOW_ESIGN_WEBHOOK_SECRET"]
+        webhook_without_secret = c.post(
+            "/api/integrations/esign/webhook",
+            json={"event_id": "evt_prod_guard", "status": "completed"},
+        )
+        assert_true(
+            "webhook secret required in production",
+            webhook_without_secret.status_code == 401
+            and webhook_without_secret.get_json().get("code")
+            == "invalid_webhook_signature",
+        )
+        os.environ["LEGALFLOW_ENV"] = "development"
+        if original_webhook_secret is not None:
+            os.environ["LEGALFLOW_ESIGN_WEBHOOK_SECRET"] = original_webhook_secret
+
         health = c.get("/api/health")
         assert_true("health endpoint", health.status_code == 200 and health.get_json().get("ok"))
 
@@ -247,6 +279,19 @@ def run() -> None:
             and tah_data.get("status") == "signed"
             and len(webhook_events) == 1,
         )
+
+        if original_env is not None:
+            os.environ["LEGALFLOW_ENV"] = original_env
+        else:
+            os.environ.pop("LEGALFLOW_ENV", None)
+        if original_token is not None:
+            os.environ["LEGALFLOW_SSO_TOKEN"] = original_token
+        else:
+            os.environ.pop("LEGALFLOW_SSO_TOKEN", None)
+        if original_webhook_secret is not None:
+            os.environ["LEGALFLOW_ESIGN_WEBHOOK_SECRET"] = original_webhook_secret
+        else:
+            os.environ.pop("LEGALFLOW_ESIGN_WEBHOOK_SECRET", None)
 
 
 if __name__ == "__main__":
