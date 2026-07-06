@@ -177,3 +177,28 @@ export interface RoutingQueueResponse {
     total: number;
   };
 }
+
+export type InboxProvider = "gmail" | "outlook";
+
+export interface InboxSearchItem {
+  id: string;
+  thread_id?: string;
+  subject: string;
+  has_contract_attachment_hint?: boolean;
+  received_at?: string;
+}
+
+export interface InboxIntegrationPayload {
+  provider: InboxProvider;
+  mode: "real" | "simulation";
+  connection_id?: string;
+  status?: string;
+  query?: string;
+  results?: InboxSearchItem[];
+  total?: number;
+}
+
+export interface InboxIntegrationResponse {
+  ok: true;
+  integration: InboxIntegrationPayload;
+}

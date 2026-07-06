@@ -4,14 +4,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   analyzeContractFile,
+  connectInbox,
   createESignEnvelope,
   createMatter,
   createRecipientView,
   dispatchRouting,
   getRoutingQueue,
+  searchInbox,
   simulateSignedWebhook,
 } from "@/lib/api";
-import type { AnalyzeContractUploadAnalysis, RoutingQueueItem } from "@/types/contract";
+import type {
+  AnalyzeContractUploadAnalysis,
+  InboxProvider,
+  RoutingQueueItem,
+} from "@/types/contract";
 
 type HitlFormState = {
   contractType: string;
@@ -25,7 +31,6 @@ type HitlFormState = {
   reviewerComment: string;
 };
 
-type InboxProvider = "gmail" | "outlook";
 type ResultViewTab = "important" | "parties" | "full";
 
 function parseLines(value: string): string[] {
@@ -81,6 +86,7 @@ export default function DashboardPage() {
   const [isInboxConnected, setIsInboxConnected] = useState(false);
   const [mailSearch, setMailSearch] = useState("contrato OR acuerdo OR NDA");
   const [mailResults, setMailResults] = useState<string[]>([]);
+  const [isInboxLoading, setIsInboxLoading] = useState(false);
   const [resultViewTab, setResultViewTab] = useState<ResultViewTab>("important");
 
   const riskCount = useMemo(() => analysis?.risk_items?.length || 0, [analysis]);
@@ -213,25 +219,49 @@ export default function DashboardPage() {
     }
   }
 
-  function handleConnectInbox() {
-    setIsInboxConnected(true);
-    setStatus(
-      `${inboxProvider === "gmail" ? "Gmail" : "Outlook"} conectado en modo demo. Ya puedes buscar contratos por email.`
-    );
+  async function handleConnectInbox() {
+    setIsInboxLoading(true);
+    try {
+      const response = await connectInbox(inboxProvider);
+      setIsInboxConnected(true);
+      setStatus(
+        `${inboxProvider === "gmail" ? "Gmail" : "Outlook"} conectado en modo ${
+          response.integration.mode
+        }. Ya puedes buscar contratos por email.`
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error desconocido";
+      setStatus(`Error conectando inbox: ${message}`);
+    } finally {
+      setIsInboxLoading(false);
+    }
   }
 
-  function handleSearchInbox() {
+  async function handleSearchInbox() {
     if (!isInboxConnected) {
       setStatus("Primero conecta Gmail u Outlook para buscar contratos.");
       return;
     }
-    const providerLabel = inboxProvider === "gmail" ? "Gmail" : "Outlook";
-    setMailResults([
-      `${providerLabel} · Acme -> MSA v3 - adjunto contrato_servicios_v3.docx`,
-      `${providerLabel} · VendorX -> NDA mutuo - adjunto nda_vendorx.pdf`,
-      `${providerLabel} · Cliente Norte -> Contrato marco - adjunto contrato_marco_2026.pdf`,
-    ]);
-    setStatus(`Busqueda completada en ${providerLabel} con query: "${mailSearch}".`);
+    setIsInboxLoading(true);
+    try {
+      const response = await searchInbox(inboxProvider, mailSearch);
+      const results = response.integration.results || [];
+      setMailResults(
+        results.map(
+          (item) =>
+            `${item.subject}${item.has_contract_attachment_hint ? " · adjunto detectado" : ""}`
+        )
+      );
+      const providerLabel = inboxProvider === "gmail" ? "Gmail" : "Outlook";
+      setStatus(
+        `Busqueda completada en ${providerLabel} (${response.integration.mode}) con ${results.length} resultados.`
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error desconocido";
+      setStatus(`Error buscando en inbox: ${message}`);
+    } finally {
+      setIsInboxLoading(false);
+    }
   }
 
   function updateHitlField<K extends keyof HitlFormState>(key: K, value: HitlFormState[K]) {
@@ -425,16 +455,22 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={handleConnectInbox}
+              disabled={isInboxLoading}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
             >
-              {isInboxConnected ? "Conectado" : `Conectar ${inboxProvider === "gmail" ? "Gmail" : "Outlook"}`}
+              {isInboxLoading
+                ? "Conectando..."
+                : isInboxConnected
+                  ? "Conectado"
+                  : `Conectar ${inboxProvider === "gmail" ? "Gmail" : "Outlook"}`}
             </button>
             <button
               type="button"
               onClick={handleSearchInbox}
+              disabled={isInboxLoading || !isInboxConnected}
               className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-100"
             >
-              Buscar contratos en email
+              {isInboxLoading ? "Buscando..." : "Buscar contratos en email"}
             </button>
           </div>
           <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">

@@ -9,6 +9,8 @@ import type {
   CreateMatterResponse,
   HealthResponse,
   IntegrationResponse,
+  InboxIntegrationResponse,
+  InboxProvider,
   RoutingDispatchRequest,
   RoutingDispatchResponse,
   RoutingQueueResponse,
@@ -199,4 +201,41 @@ export async function dispatchRouting(
 export async function getRoutingQueue(): Promise<RoutingQueueResponse> {
   const response = await fetch(buildUrl("/api/routing/queue"), { method: "GET" });
   return parseResponse<RoutingQueueResponse>(response);
+}
+
+export async function connectInbox(
+  provider: InboxProvider,
+  sso?: SsoOptions
+): Promise<InboxIntegrationResponse> {
+  return requestJson<InboxIntegrationResponse>(
+    "/api/integrations/inbox/connect",
+    {
+      method: "POST",
+      headers: toSsoHeaders(sso),
+    },
+    { provider } as unknown as JsonValue
+  );
+}
+
+export async function searchInbox(
+  provider: InboxProvider,
+  query: string,
+  sso?: SsoOptions
+): Promise<InboxIntegrationResponse> {
+  return requestJson<InboxIntegrationResponse>(
+    "/api/integrations/inbox/search",
+    {
+      method: "POST",
+      headers: toSsoHeaders(sso),
+    },
+    { provider, query } as unknown as JsonValue
+  );
+}
+
+export async function trackLandingEvent(event: string, source = "frontend_landing"): Promise<void> {
+  await requestJson<{ ok: true; tracked: string }>(
+    "/api/analytics/track",
+    { method: "POST" },
+    { event, source } as unknown as JsonValue
+  );
 }

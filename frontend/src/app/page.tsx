@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect } from "react";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/ui/Footer";
+import { trackLandingEvent } from "@/lib/api";
 
 const features = [
   {
@@ -44,6 +48,10 @@ const benchmarkKpis = [
 ];
 
 export default function LandingPage() {
+  useEffect(() => {
+    void trackLandingEvent("landing_view");
+  }, []);
+
   return (
     <main className="min-h-screen">
       <Navbar />
@@ -68,12 +76,19 @@ export default function LandingPage() {
             <div className="mt-10 flex flex-wrap gap-4">
               <Link
                 href="/dashboard"
+                onClick={() => {
+                  void trackLandingEvent("landing_open_dashboard");
+                  void trackLandingEvent("landing_cta_click");
+                }}
                 className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white shadow-lg shadow-blue-900/30 hover:bg-blue-700"
               >
                 Abrir pagina operativa
               </Link>
               <Link
                 href="/demo"
+                onClick={() => {
+                  void trackLandingEvent("landing_open_demo");
+                }}
                 className="rounded-xl border border-white/30 px-6 py-3 font-semibold text-white hover:bg-white/10"
               >
                 Ver flujo demo
