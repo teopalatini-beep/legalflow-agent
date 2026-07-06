@@ -13,7 +13,12 @@ from uuid import uuid4
 from flask import Flask, jsonify, render_template, request
 
 from agente import ErrorWorkflow, ejecutar_workflow
-from enterprise_integrations import CRMConnector, DMSConnector, ESignatureConnector
+from enterprise_integrations import (
+    CRMConnector,
+    DMSConnector,
+    ESignatureConnector,
+    EmailInboxConnector,
+)
 from matters_store import (
     add_document_version,
     append_event,
@@ -35,6 +40,7 @@ app = Flask(__name__)
 crm_connector = CRMConnector()
 dms_connector = DMSConnector()
 esign_connector = ESignatureConnector()
+inbox_connector = EmailInboxConnector()
 MATTER_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_\-]{6,80}$")
 
 
@@ -48,6 +54,13 @@ def error_response(message: str, status: int = 400, code: str = "bad_request") -
 
 def json_payload() -> Dict[str, Any]:
     return request.get_json(force=True, silent=True) or {}
+
+
+def _extract_client_ip() -> str:
+    forwarded = request.headers.get("X-Forwarded-For", "").strip()
+    if forwarded:
+        return forwarded.split(",", 1)[0].strip()
+    return request.remote_addr or "unknown"
 
 
 def validar_matter_id(matter_id: str) -> bool:
@@ -292,6 +305,7 @@ def health() -> Any:
 @app.get("/api/health/config")
 def health_config() -> Any:
     esign_health = esign_connector.integration_health()
+    inbox_health = inbox_connector.integration_health()
     return jsonify(
         {
             "ok": True,
@@ -303,9 +317,45 @@ def health_config() -> Any:
                 "esign_webhook_secret_set": bool(os.getenv("LEGALFLOW_ESIGN_WEBHOOK_SECRET")),
                 "esign_mode": esign_health["mode"],
                 "esign_missing_vars": esign_health["missing_vars"],
+                "gmail_token_set": inbox_health["gmail_token_set"],
+                "outlook_token_set": inbox_health["outlook_token_set"],
             },
         }
     )
+
+
+@app.post("/api/analytics/track")
+def analytics_track() -> Any:
+    payload = json_payload()
+    event = str(payload.get("event", "")).strip().lower()
+    allowed_events = {
+        "landing_view",
+        "landing_cta_click",
+        "landing_open_dashboard",
+        "landing_open_demo",
+    }
+    if event not in allowed_events:
+        return error_response("Evento no permitido.", 400, "invalid_event")
+    metric_log(
+        "landing_event",
+        1,
+        {
+            "event": event,
+            "source": str(payload.get("source", "landing")),
+            "path": request.path,
+            "ip": _extract_client_ip(),
+            "user_agent": request.headers.get("User-Agent", "")[:180],
+        },
+    )
+    audit_log(
+        "landing_event",
+        {
+            "event": event,
+            "source": str(payload.get("source", "landing")),
+            "ip": _extract_client_ip(),
+        },
+    )
+    return jsonify({"ok": True, "tracked": event})
 
 
 @app.post("/api/analizar")
@@ -1082,6 +1132,64 @@ def esign_webhook() -> Any:
             "last_webhook_at": datetime.now(timezone.utc).isoformat(),
         },
     )
+
+
+@app.post("/api/integrations/inbox/connect")
+@require_sso(required_groups=["legal_admin", "legal_ops", "legal_viewer", "approver"])
+def inbox_connect() -> Any:
+    payload = json_payload()
+    provider = str(payload.get("provider", "")).strip().lower()
+    if not provider:
+        return error_response("Falta provider.", 400, "missing_provider")
+    try:
+        result = inbox_connector.connect(provider, sso_context(request)["email"])
+    except ValueError as err:
+        return error_response(str(err), 400, "invalid_provider")
+    audit_log(
+        "inbox_connected",
+        {
+            "provider": result.get("provider"),
+            "mode": result.get("mode"),
+            "by": sso_context(request)["email"],
+        },
+    )
+    return jsonify({"ok": True, "integration": result})
+
+
+@app.post("/api/integrations/inbox/search")
+@require_sso(required_groups=["legal_admin", "legal_ops", "legal_viewer", "approver"])
+def inbox_search() -> Any:
+    payload = json_payload()
+    provider = str(payload.get("provider", "")).strip().lower()
+    query = str(payload.get("query", "")).strip()
+    if not provider:
+        return error_response("Falta provider.", 400, "missing_provider")
+    if len(query) < 2:
+        return error_response("query debe tener al menos 2 caracteres.", 400, "invalid_query")
+    try:
+        result = inbox_connector.search(provider, query)
+    except ValueError as err:
+        return error_response(str(err), 400, "invalid_provider")
+    metric_log(
+        "inbox_search_count",
+        result.get("total", 0),
+        {
+            "provider": result.get("provider"),
+            "mode": result.get("mode"),
+            "query_len": len(query),
+            "user": sso_context(request)["email"],
+        },
+    )
+    audit_log(
+        "inbox_search_executed",
+        {
+            "provider": result.get("provider"),
+            "mode": result.get("mode"),
+            "results": result.get("total", 0),
+            "by": sso_context(request)["email"],
+        },
+    )
+    return jsonify({"ok": True, "integration": result})
     append_event(
         matter_id,
         "esign_webhook_received",

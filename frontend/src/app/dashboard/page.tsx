@@ -4,14 +4,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   analyzeContractFile,
+  connectInbox,
   createESignEnvelope,
   createMatter,
   createRecipientView,
   dispatchRouting,
   getRoutingQueue,
+  searchInbox,
   simulateSignedWebhook,
 } from "@/lib/api";
-import type { AnalyzeContractUploadAnalysis, RoutingQueueItem } from "@/types/contract";
+import type {
+  AnalyzeContractUploadAnalysis,
+  InboxProvider,
+  RoutingQueueItem,
+} from "@/types/contract";
 
 type HitlFormState = {
   contractType: string;
@@ -24,6 +30,8 @@ type HitlFormState = {
   riskItemsJson: string;
   reviewerComment: string;
 };
+
+type ResultViewTab = "important" | "parties" | "full";
 
 function parseLines(value: string): string[] {
   return value
@@ -74,6 +82,12 @@ export default function DashboardPage() {
     riskItemsJson: "[]",
     reviewerComment: "",
   });
+  const [inboxProvider, setInboxProvider] = useState<InboxProvider>("gmail");
+  const [isInboxConnected, setIsInboxConnected] = useState(false);
+  const [mailSearch, setMailSearch] = useState("contrato OR acuerdo OR NDA");
+  const [mailResults, setMailResults] = useState<string[]>([]);
+  const [isInboxLoading, setIsInboxLoading] = useState(false);
+  const [resultViewTab, setResultViewTab] = useState<ResultViewTab>("important");
 
   const riskCount = useMemo(() => analysis?.risk_items?.length || 0, [analysis]);
   const isPdfFile = selectedFile ? selectedFile.name.toLowerCase().endsWith(".pdf") : false;
@@ -102,6 +116,10 @@ export default function DashboardPage() {
       return riskMatch && destinationMatch;
     });
   }, [activeQueueItems, queueRiskFilter, queueDestinationFilter]);
+  const topRiskItems = useMemo(() => analysis?.risk_items?.slice(0, 3) || [], [analysis]);
+  const parsedQualityScore = Number(hitlForm.qualityScore) || 0;
+  const parsedParties = useMemo(() => parseLines(hitlForm.partiesInvolved), [hitlForm.partiesInvolved]);
+  const parsedKeyClauses = useMemo(() => parseLines(hitlForm.keyClauses), [hitlForm.keyClauses]);
 
   useEffect(() => {
     if (!selectedFile) {
@@ -198,6 +216,51 @@ export default function DashboardPage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Error desconocido";
       setStatus(`Error analizando archivo: ${message}`);
+    }
+  }
+
+  async function handleConnectInbox() {
+    setIsInboxLoading(true);
+    try {
+      const response = await connectInbox(inboxProvider);
+      setIsInboxConnected(true);
+      setStatus(
+        `${inboxProvider === "gmail" ? "Gmail" : "Outlook"} conectado en modo ${
+          response.integration.mode
+        }. Ya puedes buscar contratos por email.`
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error desconocido";
+      setStatus(`Error conectando inbox: ${message}`);
+    } finally {
+      setIsInboxLoading(false);
+    }
+  }
+
+  async function handleSearchInbox() {
+    if (!isInboxConnected) {
+      setStatus("Primero conecta Gmail u Outlook para buscar contratos.");
+      return;
+    }
+    setIsInboxLoading(true);
+    try {
+      const response = await searchInbox(inboxProvider, mailSearch);
+      const results = response.integration.results || [];
+      setMailResults(
+        results.map(
+          (item) =>
+            `${item.subject}${item.has_contract_attachment_hint ? " · adjunto detectado" : ""}`
+        )
+      );
+      const providerLabel = inboxProvider === "gmail" ? "Gmail" : "Outlook";
+      setStatus(
+        `Busqueda completada en ${providerLabel} (${response.integration.mode}) con ${results.length} resultados.`
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error desconocido";
+      setStatus(`Error buscando en inbox: ${message}`);
+    } finally {
+      setIsInboxLoading(false);
     }
   }
 
@@ -356,12 +419,85 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-7xl">
         <h1 className="text-3xl font-bold text-slate-900">Dashboard del Abogado</h1>
         <p className="mt-2 text-slate-600">
-          Split-view real: visor de contrato + validacion HITL sobre el JSON de{" "}
-          <code>/api/analyze-contract</code>.
+          Flujo operativo: entrada por Gmail/Outlook o upload manual, analisis IA y validacion
+          legal por vistas priorizadas.
         </p>
 
         <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-lg font-semibold text-slate-900">Entrada desde correo corporativo</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Simula conexion OAuth para que el abogado busque contratos recibidos por email antes de
+            subir manualmente.
+          </p>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <label className="text-xs font-semibold text-slate-700">
+              Proveedor
+              <select
+                value={inboxProvider}
+                onChange={(e) => setInboxProvider(e.target.value as InboxProvider)}
+                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-800"
+              >
+                <option value="gmail">Gmail</option>
+                <option value="outlook">Outlook</option>
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-slate-700 md:col-span-2">
+              Query de busqueda
+              <input
+                value={mailSearch}
+                onChange={(e) => setMailSearch(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal outline-none focus:border-blue-500"
+                placeholder="ej: contrato OR acuerdo OR NDA"
+              />
+            </label>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleConnectInbox}
+              disabled={isInboxLoading}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              {isInboxLoading
+                ? "Conectando..."
+                : isInboxConnected
+                  ? "Conectado"
+                  : `Conectar ${inboxProvider === "gmail" ? "Gmail" : "Outlook"}`}
+            </button>
+            <button
+              type="button"
+              onClick={handleSearchInbox}
+              disabled={isInboxLoading || !isInboxConnected}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-slate-100"
+            >
+              {isInboxLoading ? "Buscando..." : "Buscar contratos en email"}
+            </button>
+          </div>
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+              Resultados de correo (demo)
+            </p>
+            {mailResults.length === 0 ? (
+              <p className="mt-2 text-sm text-slate-500">
+                Sin resultados aun. Conecta proveedor y ejecuta una busqueda.
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {mailResults.map((item) => (
+                  <li key={item} className="rounded-md border border-slate-200 bg-white p-2 text-sm text-slate-700">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+
+        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
           <h2 className="text-lg font-semibold text-slate-900">Carga de contrato</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Alternativa manual para casos donde no quieres ingresar por correo.
+          </p>
           <div
             onDragOver={(e) => {
               e.preventDefault();
@@ -579,7 +715,9 @@ export default function DashboardPage() {
           </section>
 
           <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="text-lg font-semibold text-slate-900">Validacion HITL (editable)</h2>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Resultado estructurado + validacion HITL
+            </h2>
             <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
               <p>
                 <strong>run_id:</strong> {analysis?.run_id || "-"}
@@ -595,7 +733,135 @@ export default function DashboardPage() {
               </p>
             </div>
 
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setResultViewTab("important")}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+                  resultViewTab === "important"
+                    ? "bg-rose-600 text-white"
+                    : "border border-slate-300 bg-white text-slate-800"
+                }`}
+              >
+                1) Lo importante
+              </button>
+              <button
+                type="button"
+                onClick={() => setResultViewTab("parties")}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+                  resultViewTab === "parties"
+                    ? "bg-blue-600 text-white"
+                    : "border border-slate-300 bg-white text-slate-800"
+                }`}
+              >
+                2) Partes y datos clave
+              </button>
+              <button
+                type="button"
+                onClick={() => setResultViewTab("full")}
+                className={`rounded-lg px-4 py-2 text-sm font-semibold ${
+                  resultViewTab === "full"
+                    ? "bg-slate-900 text-white"
+                    : "border border-slate-300 bg-white text-slate-800"
+                }`}
+              >
+                3) Descripcion completa
+              </button>
+            </div>
+
+            {resultViewTab === "important" && (
+              <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-slate-800">
+                <p className="font-semibold text-rose-900">Resumen ejecutivo para decision rapida</p>
+                <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  <p>
+                    <strong>Riesgo:</strong> {hitlForm.riskLevel || "-"}
+                  </p>
+                  <p>
+                    <strong>Accion sugerida:</strong> {hitlForm.recommendedAction || "-"}
+                  </p>
+                  <p>
+                    <strong>Quality score:</strong> {parsedQualityScore}
+                  </p>
+                </div>
+                <p className="mt-3 text-slate-700">{hitlForm.summary || "Sin resumen aun."}</p>
+                <div className="mt-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-rose-800">
+                    Top riesgos detectados
+                  </p>
+                  {topRiskItems.length === 0 ? (
+                    <p className="mt-1 text-sm text-slate-600">Sin riesgos cargados aun.</p>
+                  ) : (
+                    <ul className="mt-2 space-y-2">
+                      {topRiskItems.map((item, idx) => (
+                        <li
+                          key={`${item.riesgo}-${idx}`}
+                          className="rounded-md border border-rose-200 bg-white p-2"
+                        >
+                          <p className="font-semibold text-slate-900">
+                            {item.riesgo} · {item.nivel}
+                          </p>
+                          <p className="text-slate-700">{item.recomendacion}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {resultViewTab === "parties" && (
+              <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-slate-800">
+                <p className="font-semibold text-blue-900">Partes y puntos clave del contrato</p>
+                <div className="mt-3 grid gap-4 md:grid-cols-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-800">
+                      Partes
+                    </p>
+                    {parsedParties.length === 0 ? (
+                      <p className="mt-1 text-slate-600">Sin partes cargadas.</p>
+                    ) : (
+                      <ul className="mt-2 list-disc space-y-1 pl-5">
+                        {parsedParties.map((party) => (
+                          <li key={party}>{party}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-800">
+                      Clausulas clave
+                    </p>
+                    {parsedKeyClauses.length === 0 ? (
+                      <p className="mt-1 text-slate-600">Sin clausulas cargadas.</p>
+                    ) : (
+                      <ul className="mt-2 list-disc space-y-1 pl-5">
+                        {parsedKeyClauses.map((clause) => (
+                          <li key={clause}>{clause}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {resultViewTab === "full" && (
+              <div className="mt-4 rounded-lg border border-slate-300 bg-slate-50 p-4 text-sm text-slate-800">
+                <p className="font-semibold text-slate-900">Descripcion completa</p>
+                <p className="mt-2">
+                  Esta vista consolida resumen, clausulas, riesgos y recomendacion para auditoria y
+                  trazabilidad.
+                </p>
+                <pre className="mt-3 max-h-64 overflow-auto rounded bg-slate-900 p-3 text-xs text-slate-100">
+                  {analysis ? JSON.stringify(analysis, null, 2) : "Sin resultado todavia."}
+                </pre>
+              </div>
+            )}
+
             <div className="mt-4 grid gap-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Formulario editable para aprobacion legal final
+              </p>
               <label className="text-xs font-semibold text-slate-700">Tipo de contrato</label>
               <input
                 value={hitlForm.contractType}
@@ -693,7 +959,7 @@ export default function DashboardPage() {
 
             <div className="mt-4 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
               <p>
-                <strong>JSON original de analisis:</strong>
+                <strong>Snapshot tecnico del analisis (debug):</strong>
               </p>
               <pre className="mt-2 max-h-56 overflow-auto rounded bg-slate-900 p-3 text-xs text-slate-100">
                 {analysis ? JSON.stringify(analysis, null, 2) : "Sin resultado todavia."}

@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from urllib import error, request
+from urllib.parse import quote
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
@@ -320,4 +321,165 @@ class ESignatureConnector:
             "envelope_id": envelope.get("envelope_id"),
             "recipient_id": envelope.get("recipient_id"),
             "status": self.signature_status_pending,
+        }
+
+
+class EmailInboxConnector:
+    """Conector de inbox para Gmail/Outlook con fallback en simulacion."""
+
+    providers = {"gmail", "outlook"}
+
+    def _provider_config(self, provider: str) -> Dict[str, str]:
+        provider = provider.strip().lower()
+        if provider == "gmail":
+            return {
+                "access_token": os.getenv("LEGALFLOW_GMAIL_ACCESS_TOKEN", "").strip(),
+                "api_base_url": "https://gmail.googleapis.com/gmail/v1/users/me/messages",
+            }
+        if provider == "outlook":
+            return {
+                "access_token": os.getenv("LEGALFLOW_OUTLOOK_ACCESS_TOKEN", "").strip(),
+                "api_base_url": "https://graph.microsoft.com/v1.0/me/messages",
+            }
+        return {"access_token": "", "api_base_url": ""}
+
+    def integration_health(self) -> Dict[str, Any]:
+        return {
+            "gmail_token_set": bool(os.getenv("LEGALFLOW_GMAIL_ACCESS_TOKEN", "").strip()),
+            "outlook_token_set": bool(os.getenv("LEGALFLOW_OUTLOOK_ACCESS_TOKEN", "").strip()),
+        }
+
+    def connect(self, provider: str, user_email: str) -> Dict[str, Any]:
+        clean_provider = provider.strip().lower()
+        if clean_provider not in self.providers:
+            raise ValueError("Proveedor invalido. Usa gmail u outlook.")
+        cfg = self._provider_config(clean_provider)
+        mode = "real" if cfg["access_token"] else "simulation"
+        connection_id = (
+            f"inbox_{clean_provider}_"
+            f"{hashlib.md5(f'{user_email}:{clean_provider}'.encode()).hexdigest()[:12]}"
+        )
+        _append_event(
+            "inbox_connect",
+            {
+                "provider": clean_provider,
+                "mode": mode,
+                "user_email": user_email,
+                "connection_id": connection_id,
+                "status": "connected",
+            },
+        )
+        return {
+            "provider": clean_provider,
+            "mode": mode,
+            "connection_id": connection_id,
+            "status": "connected",
+        }
+
+    def _gmail_search(self, query: str, access_token: str) -> list[Dict[str, Any]]:
+        encoded_q = quote(query)
+        url = (
+            f"{self._provider_config('gmail')['api_base_url']}?q={encoded_q}"
+            "&maxResults=5&fields=messages(id,threadId)"
+        )
+        req = request.Request(
+            url,
+            method="GET",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        with request.urlopen(req, timeout=8) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        items = payload.get("messages", []) or []
+        return [
+            {
+                "id": item.get("id", ""),
+                "thread_id": item.get("threadId", ""),
+                "subject": "Email encontrado en Gmail (metadata parcial)",
+                "has_contract_attachment_hint": True,
+            }
+            for item in items
+        ]
+
+    def _outlook_search(self, query: str, access_token: str) -> list[Dict[str, Any]]:
+        # Contiene por simplicidad: filtro aproximado por subject/body preview.
+        safe_query = query.replace("'", "''")
+        encoded_filter = quote(
+            f"contains(subject,'{safe_query}') or contains(bodyPreview,'{safe_query}')"
+        )
+        url = (
+            f"{self._provider_config('outlook')['api_base_url']}"
+            f"?$top=5&$select=id,subject,hasAttachments,receivedDateTime"
+            f"&$filter={encoded_filter}"
+        )
+        req = request.Request(
+            url,
+            method="GET",
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        with request.urlopen(req, timeout=8) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        items = payload.get("value", []) or []
+        return [
+            {
+                "id": item.get("id", ""),
+                "thread_id": "",
+                "subject": item.get("subject", "Sin asunto"),
+                "has_contract_attachment_hint": bool(item.get("hasAttachments")),
+                "received_at": item.get("receivedDateTime"),
+            }
+            for item in items
+        ]
+
+    def _simulation_search(self, provider: str, query: str) -> list[Dict[str, Any]]:
+        label = "Gmail" if provider == "gmail" else "Outlook"
+        base_results = [
+            f"{label} · Acme -> MSA v3 - contrato_servicios_v3.docx",
+            f"{label} · VendorX -> NDA mutuo - nda_vendorx.pdf",
+            f"{label} · Cliente Norte -> Contrato marco - contrato_marco_2026.pdf",
+        ]
+        normalized = query.strip().lower()
+        filtered = [x for x in base_results if not normalized or normalized in x.lower()]
+        return [
+            {
+                "id": f"sim_{provider}_{idx}",
+                "thread_id": f"sim_thread_{idx}",
+                "subject": item,
+                "has_contract_attachment_hint": True,
+            }
+            for idx, item in enumerate(filtered[:5], start=1)
+        ]
+
+    def search(self, provider: str, query: str) -> Dict[str, Any]:
+        clean_provider = provider.strip().lower()
+        if clean_provider not in self.providers:
+            raise ValueError("Proveedor invalido. Usa gmail u outlook.")
+        cfg = self._provider_config(clean_provider)
+        mode = "real" if cfg["access_token"] else "simulation"
+        items: list[Dict[str, Any]]
+        if mode == "real":
+            try:
+                if clean_provider == "gmail":
+                    items = self._gmail_search(query, cfg["access_token"])
+                else:
+                    items = self._outlook_search(query, cfg["access_token"])
+            except (error.URLError, TimeoutError, ValueError, json.JSONDecodeError):
+                mode = "simulation"
+                items = self._simulation_search(clean_provider, query)
+        else:
+            items = self._simulation_search(clean_provider, query)
+        _append_event(
+            "inbox_search",
+            {
+                "provider": clean_provider,
+                "mode": mode,
+                "query": query,
+                "results_count": len(items),
+            },
+        )
+        return {
+            "provider": clean_provider,
+            "mode": mode,
+            "query": query,
+            "results": items,
+            "total": len(items),
         }
