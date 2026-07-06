@@ -7,6 +7,11 @@ from typing import Any, Callable, Dict, Tuple
 from flask import Request, jsonify, request
 
 
+def _is_production_like() -> bool:
+    value = os.getenv("LEGALFLOW_ENV", "").strip().lower()
+    return value in {"prod", "production", "staging"}
+
+
 def _extract_bearer(req: Request) -> str:
     auth = req.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
@@ -43,6 +48,12 @@ def require_sso(required_groups: list[str] | None = None) -> Callable[..., Any]:
             if not ctx["user"] or not ctx["email"]:
                 return _error_response(
                     "sso_missing_headers", "SSO headers faltantes.", 401
+                )
+            if _is_production_like() and not expected_token:
+                return _error_response(
+                    "sso_misconfigured",
+                    "SSO no configurado en entorno productivo.",
+                    503,
                 )
             if expected_token and ctx["token"] != expected_token:
                 return _error_response("sso_invalid_token", "Token SSO invalido.", 401)

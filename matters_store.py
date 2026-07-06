@@ -144,6 +144,15 @@ def register_esign_webhook_event_id(matter_id: str, event_id: str) -> bool:
     return True
 
 
+def has_esign_webhook_event_id(matter_id: str, event_id: str) -> bool:
+    matter = get_matter(matter_id)
+    if not matter:
+        raise FileNotFoundError(f"Matter '{matter_id}' no existe.")
+    esign = matter.get("esign", {})
+    processed = esign.get("processed_event_ids", [])
+    return event_id in processed
+
+
 def find_matter_by_envelope_id(envelope_id: str) -> Dict[str, Any] | None:
     _ensure_dir()
     for path in MATTERS_DIR.glob("*.json"):

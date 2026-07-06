@@ -26,6 +26,7 @@ from matters_store import (
     decision_approval,
     find_matter_by_envelope_id,
     get_matter,
+    has_esign_webhook_event_id,
     list_matters,
     register_esign_webhook_event_id,
     request_approvals,
@@ -61,6 +62,11 @@ def _extract_client_ip() -> str:
     if forwarded:
         return forwarded.split(",", 1)[0].strip()
     return request.remote_addr or "unknown"
+
+
+def _is_production_like() -> bool:
+    value = os.getenv("LEGALFLOW_ENV", "").strip().lower()
+    return value in {"prod", "production", "staging"}
 
 
 def validar_matter_id(matter_id: str) -> bool:
@@ -251,6 +257,8 @@ def _resolve_webhook_event_id(payload: Dict[str, Any]) -> str:
 def _verify_esign_webhook_signature(raw_body: bytes) -> bool:
     secret = os.getenv("LEGALFLOW_ESIGN_WEBHOOK_SECRET", "").strip()
     if not secret:
+        if _is_production_like():
+            return False
         return True
     provided = (
         request.headers.get("X-ESIGN-SIGNATURE", "").strip()
@@ -1109,15 +1117,15 @@ def esign_webhook() -> Any:
         or ""
     ).strip()
     event_id = _resolve_webhook_event_id(payload)
-    is_new = register_esign_webhook_event_id(matter_id, event_id)
-    if not is_new:
+    if has_esign_webhook_event_id(matter_id, event_id):
+        current = get_matter(matter_id) or matter
         return jsonify(
             {
                 "ok": True,
                 "duplicate": True,
                 "matter_id": matter_id,
                 "event_id": event_id,
-                "status": matter.get("status"),
+                "status": current.get("status"),
             }
         )
 
@@ -1131,6 +1139,36 @@ def esign_webhook() -> Any:
             "last_webhook_event_id": event_id,
             "last_webhook_at": datetime.now(timezone.utc).isoformat(),
         },
+    )
+    append_event(
+        matter_id,
+        "esign_webhook_received",
+        {
+            "event_id": event_id,
+            "envelope_id": envelope_id,
+            "recipient_id": recipient_id,
+            "status": status,
+            "raw_status": raw_status,
+            "source": "esign_webhook",
+        },
+    )
+    register_esign_webhook_event_id(matter_id, event_id)
+    audit_log(
+        "esign_webhook_processed",
+        {
+            "matter_id": matter_id,
+            "event_id": event_id,
+            "status": status,
+        },
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "duplicate": False,
+            "matter_id": matter_id,
+            "event_id": event_id,
+            "status": status,
+        }
     )
 
 
@@ -1190,35 +1228,6 @@ def inbox_search() -> Any:
         },
     )
     return jsonify({"ok": True, "integration": result})
-    append_event(
-        matter_id,
-        "esign_webhook_received",
-        {
-            "event_id": event_id,
-            "envelope_id": envelope_id,
-            "recipient_id": recipient_id,
-            "status": status,
-            "raw_status": raw_status,
-            "source": "esign_webhook",
-        },
-    )
-    audit_log(
-        "esign_webhook_processed",
-        {
-            "matter_id": matter_id,
-            "event_id": event_id,
-            "status": status,
-        },
-    )
-    return jsonify(
-        {
-            "ok": True,
-            "duplicate": False,
-            "matter_id": matter_id,
-            "event_id": event_id,
-            "status": status,
-        }
-    )
 
 
 if __name__ == "__main__":
