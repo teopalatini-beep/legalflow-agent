@@ -1,66 +1,125 @@
 # LegalFlow Agent
 
-> Sistema multi-agente de IA para análisis de contratos y gestión de expedientes legales — desde la ingesta de un contrato hasta la detección de riesgos, redlines sugeridos y seguimiento post-firma.
+Plataforma de **legal ops con IA** que convierte la revisión de contratos en un flujo trazable: intake → riesgos → redlines → matter (aprobaciones, e-sign, timeline). Pensada para abogados in-house o estudios que necesitan decidir más rápido, con evidencia, no solo un resumen suelto.
 
-## El problema que resuelve
+---
 
-Revisar contratos manualmente es lento y depende de la disponibilidad de un abogado para cada paso: leer, extraer cláusulas y obligaciones, detectar riesgos, proponer redlines, y luego seguir el cumplimiento post-firma. LegalFlow automatiza ese pipeline con un equipo de agentes especializados, cada uno responsable de una etapa del análisis, coordinados sobre un modelo de "expediente vivo" (matter) con trazabilidad completa de decisiones.
+## Qué estoy haciendo
 
-## Funcionalidades clave
+Estoy construyendo un **Legal OS** multi-agente:
 
-- **Pipeline multi-agente**: extracción de cláusulas y evidencias, scoring de riesgo contextualizado, generación de propuestas de redline, y verificación/QA legal antes de entregar el resultado.
-- **Capa de abstracción de LLM** (`llm_provider.py`): desacopla la lógica de negocio del proveedor de modelo, permitiendo cambiar entre proveedores sin reescribir los agentes.
-- **Middleware de SSO** (`sso_auth.py`) para integraciones enterprise.
-- **Gestión de expedientes** (`matters_store.py`): estados, aprobaciones y deadlines de cada caso.
-- **Integraciones enterprise** (`enterprise_integrations.py`) y observabilidad (`observability.py`) para trazar el comportamiento del sistema en producción.
-- **API-first**: endpoints públicos (`/api/analizar`, `/api/casos`) consumidos por un frontend en Next.js.
-- **Datos de demo incluidos** (`data/demo/`) con flujos completos ejecutables sin depender de datos reales.
+1. **Ingiere** un contrato (demo local o vía API/portal)
+2. **Extrae** cláusulas y señales de riesgo
+3. **Puntúa** riesgos con evidencia y sugiere redlines
+4. **Orquesta** especialistas (contratos, sociedades, causas, riesgos, soporte) bajo un Head of Legal
+5. **Persiste** el caso/matter con historial y routing humano (HITL)
+6. **Muestra** todo en portal Flask + dashboard Next.js
 
-## Arquitectura
+No reemplaza al abogado: acelera el primer pase y deja un rastro auditable para que el humano decida.
 
-Backend en Python (Flask, vía `api/index.py`) con un conjunto de agentes bajo `mals/agents/` orquestados según el flujo documentado en `docs/LEGAL_OS_ARCHITECTURE.md`:
+---
+
+## Por qué lo estoy haciendo
+
+La revisión manual de contratos es lenta, inconsistente y difícil de auditar. Cada persona mira distinto; el “por qué se aprobó esto” se pierde en el mail.
+
+Quería un sistema que:
+
+- aplique **playbooks** configurables (no magia opaca)
+- priorice **riesgos con evidencia**
+- proponga **redlines** accionables
+- guarde el **matter** de punta a punta
+- permita **humano en el loop** antes de firmar o escalar
+
+---
+
+## Beneficios
+
+| Beneficio | En la práctica |
+|---|---|
+| **Más rápido el primer pase** | Pipeline automático en minutos, no horas |
+| **Riesgos priorizados** | Ranking + evidencia, no un muro de texto |
+| **Redlines sugeridos** | Punto de partida para negociar |
+| **Trazabilidad** | Historial del matter / decisiones |
+| **HITL** | Colas de revisión humana cuando hace falta |
+| **Demo local** | Modo `local` sin depender de API keys |
+
+---
+
+## Qué hace (y qué no)
+
+**Sí hace**
+- Analizar contratos por pipeline o API
+- Orquestar agentes especializados (MALS)
+- Persistir cases/matters
+- Servir portal + API de salud
+- Simular integraciones enterprise si no hay credenciales
+
+**No hace**
+- Sustituir consejo legal profesional
+- Firmar o enviar a e-sign sin configuración / revisión
+- Garantizar cobertura de todos los derechos/jurisdicciones
+
+---
+
+## Cómo funciona
 
 ```
-IntakeAgent → ExtractorAgent → RiskAgent → RedlineAgent → VerifierAgent → MatterAgent → ObligationMonitorAgent
+Contrato
+  → ingesta / extracción
+  → riesgos + compliance
+  → redline + resumen + verifier
+  → matter store (historial)
+  → portal / API / frontend HITL
 ```
 
-El frontend (`frontend/`, Next.js + TypeScript) consume la API y ofrece el panel de gestión de expedientes. Todo el proyecto se despliega en Vercel (backend serverless + frontend).
+| Pieza | Rol |
+|---|---|
+| `agente.py` | Pipeline secuencial (`local` o `sdk` con Claude) |
+| `mals/` | Orquestador jerárquico de especialistas |
+| `portal_web.py` | Flask API + portal (puerto 8000) |
+| `frontend/` | Dashboard Next.js |
+| `docs/` | Arquitectura, runbook, demo |
 
-## Stack técnico
+---
 
-- **Backend**: Python, Flask (API serverless en Vercel)
-- **Frontend**: Next.js, TypeScript, Tailwind CSS
-- **IA**: capa de abstracción propia sobre proveedor de LLM, con prompts versionados (`prompts/`)
-- **Auth**: middleware de SSO propio
-- **Deploy**: Vercel (`vercel.json`, `api/index.py` como entrypoint serverless)
-
-## Estructura del proyecto
-
-```
-├── mals/
-│   ├── agents/              # head_of_legal, senior_a, senior_b — agentes especializados
-│   └── state.py             # estado compartido del pipeline
-├── api/index.py             # entrypoint serverless (Flask)
-├── frontend/                 # Next.js + TypeScript
-├── data/
-│   ├── demo/                 # datos de ejemplo para correr el flujo completo
-│   └── playbooks/
-├── docs/                      # arquitectura, roadmap, runbooks de operación
-├── scripts/                   # scripts de prueba y verificación del pipeline
-├── llm_provider.py            # abstracción sobre el proveedor de LLM
-├── sso_auth.py                 # middleware de autenticación SSO
-├── matters_store.py            # persistencia de expedientes
-└── enterprise_integrations.py  # integraciones con sistemas externos
-```
-
-## Cómo correrlo
+## Setup rápido
 
 ```bash
+git clone https://github.com/teopalatini-beep/legalflow-agent.git
+cd legalflow-agent
 pip install -r requirements.txt
-cp .env.example .env   # completar variables de entorno
-
-cd frontend
-npm install
+cp .env.example .env
+python scripts/check_runtime_config.py
+python portal_web.py
+# → http://localhost:8000  |  GET /api/health
 ```
 
-Ver `docs/DEMO_FLOW.md` y `scripts/run_demo_flow.py` para correr un caso de demo de punta a punta sin necesidad de datos reales.
+Pipeline demo (sin LLM):
+
+```bash
+python agente.py --modo local --demo
+```
+
+Frontend:
+
+```bash
+cd frontend && npm install && npm run dev
+```
+
+Los `.env` **nunca** se suben a git.
+
+---
+
+## Docs
+
+- [`docs/LEGAL_OS_ARCHITECTURE.md`](docs/LEGAL_OS_ARCHITECTURE.md) — arquitectura
+- [`docs/OPERATIONS_RUNBOOK.md`](docs/OPERATIONS_RUNBOOK.md) — operaciones y health
+- [`docs/DEMO_FLOW.md`](docs/DEMO_FLOW.md) — recorrido de producto
+- [`PRODUCTION_ROADMAP.md`](PRODUCTION_ROADMAP.md) — roadmap
+
+---
+
+## Estado del proyecto
+
+MVP en evolución: pipeline + portal + orquestación MALS. Enfocado en demos y pilotos; playbooks e integraciones enterprise siguen expandiéndose.
