@@ -9,6 +9,14 @@ venv/
 emails_extraidos.txt
 *_extraidos.txt
 data/fixtures/
+gmail_contrato.json
+informe_legalflow.json
+resultado_capa_1.json
+resultado_capa_4.json
+ultima_comparacion.json
+ultimo_analisis.json
+ultimo_email_contrato.json
+pipeline_output/
 
 # Dependencias y artefactos de build del frontend — nunca commitear
 frontend/node_modules/
